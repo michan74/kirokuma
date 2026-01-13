@@ -3,3 +3,4 @@ export {updateBearParameters} from "./bearCalculator";
 export {generateBearImage, getBearPrompt} from "./bearGenerator";
 export {uploadImage} from "./storage";
 export {getLatestBear, saveBear, hasBear, getInitialParameters} from "./bearRepository";
+export {saveMeal, getRecentMeals, getMealCount} from "./mealRepository";

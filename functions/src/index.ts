@@ -10,6 +10,8 @@ import {
   getLatestBear,
   saveBear,
   getInitialParameters,
+  saveMeal,
+  getRecentMeals,
 } from "./services";
 
 setGlobalOptions({maxInstances: 10});
@@ -83,16 +85,20 @@ async function handleEvent(event: WebhookEvent): Promise<void> {
       const mealAnalysis = await analyzeMeal(imageBase64);
       logger.info("Meal analyzed", {menuName: mealAnalysis.menuName});
 
-      // 4. くまパラメータを更新
+      // 4. 過去の食事履歴を取得
+      const recentMeals = await getRecentMeals();
+      logger.info("Recent meals fetched", {count: recentMeals.length});
+
+      // 5. くまパラメータを更新（履歴も考慮）
       const existingParams = existingBear?.parameters || getInitialParameters();
-      const newParams = updateBearParameters(existingParams, mealAnalysis);
+      const newParams = updateBearParameters(existingParams, mealAnalysis, recentMeals);
       logger.info("Bear parameters updated", {bodyType: newParams.bodyType});
 
-      // 5. くま画像を生成
+      // 6. くま画像を生成
       const bearImageBuffer = await generateBearImage(newParams);
       logger.info("Bear image generated");
 
-      // 6. くま画像を Storage にアップロード
+      // 7. くま画像を Storage にアップロード
       const timestamp = Date.now();
       const bearImageUrl = await uploadImage(
         bearImageBuffer,
@@ -100,38 +106,42 @@ async function handleEvent(event: WebhookEvent): Promise<void> {
       );
       logger.info("Bear image uploaded", {url: bearImageUrl});
 
-      // 7. くまをDBに保存
+      // 8. くまをDBに保存
       const savedBear = await saveBear(bearImageUrl, newParams);
       logger.info("Bear saved", {bearId: savedBear.id});
 
-      // 8. くま画像を LINE で返信（初回と2回目以降でメッセージを変える）
-      const messages = isFirstTime
-        ? [
-            {
-              type: "text" as const,
-              text: "🎉 くまが生まれたよ！\nこれから一緒に食事を記録していこうね！",
-            },
-            {
-              type: "text" as const,
-              text: `最初のごはんは${mealAnalysis.menuName}だね！🐻`,
-            },
-            {
-              type: "image" as const,
-              originalContentUrl: bearImageUrl,
-              previewImageUrl: bearImageUrl,
-            },
-          ]
-        : [
-            {
-              type: "text" as const,
-              text: `${mealAnalysis.menuName}を食べたね！🐻`,
-            },
-            {
-              type: "image" as const,
-              originalContentUrl: bearImageUrl,
-              previewImageUrl: bearImageUrl,
-            },
-          ];
+      // 9. 食事をDBに保存
+      const savedMeal = await saveMeal(imageBase64, mealAnalysis, savedBear.id);
+      logger.info("Meal saved", {mealId: savedMeal.id});
+
+      // 10. くま画像を LINE で返信（初回と2回目以降でメッセージを変える）
+      const messages = isFirstTime ?
+        [
+          {
+            type: "text" as const,
+            text: "🎉 くまが生まれたよ！\nこれから一緒に食事を記録していこうね！",
+          },
+          {
+            type: "text" as const,
+            text: `最初のごはんは${mealAnalysis.menuName}だね！🐻`,
+          },
+          {
+            type: "image" as const,
+            originalContentUrl: bearImageUrl,
+            previewImageUrl: bearImageUrl,
+          },
+        ] :
+        [
+          {
+            type: "text" as const,
+            text: `${mealAnalysis.menuName}を食べたね！🐻`,
+          },
+          {
+            type: "image" as const,
+            originalContentUrl: bearImageUrl,
+            previewImageUrl: bearImageUrl,
+          },
+        ];
 
       await lineClient.replyMessage({
         replyToken,
