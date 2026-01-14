@@ -41,7 +41,7 @@ export async function saveMeal(
  */
 export async function getRecentMeals(
   userId: string = TEST_USER_ID,
-  days: number = 7
+  days = 7
 ): Promise<Meal[]> {
   const startDate = new Date();
   startDate.setDate(startDate.getDate() - days);

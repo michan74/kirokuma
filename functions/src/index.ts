@@ -65,8 +65,22 @@ async function handleEvent(event: WebhookEvent): Promise<void> {
   if (event.message.type === "image") {
     logger.info("Image received", {messageId: event.message.id});
 
+    // ユーザーIDを取得（pushMessage用）
+    const userId = event.source.userId;
+    if (!userId) {
+      logger.error("userId not found in event source");
+      return;
+    }
+
     try {
-      // 1. LINE から画像をダウンロード
+      // 1. 「もぐもぐ」メッセージを即座に返信
+      await lineClient.replyMessage({
+        replyToken,
+        messages: [{type: "text", text: "もぐもぐ..."}],
+      });
+      logger.info("Sent mogumogu message");
+
+      // 2. LINE から画像をダウンロード
       const imageStream = await lineBlobClient.getMessageContent(event.message.id);
       const chunks: Buffer[] = [];
       for await (const chunk of imageStream) {
@@ -76,29 +90,29 @@ async function handleEvent(event: WebhookEvent): Promise<void> {
       const imageBase64 = imageBuffer.toString("base64");
       logger.info("Image downloaded", {size: imageBuffer.length});
 
-      // 2. 既存のくまを取得（初回かどうかの判定）
+      // 3. 既存のくまを取得（初回かどうかの判定）
       const existingBear = await getLatestBear();
       const isFirstTime = existingBear === null;
       logger.info("Bear check", {isFirstTime, existingBearId: existingBear?.id});
 
-      // 3. 食事を分析
+      // 4. 食事を分析
       const mealAnalysis = await analyzeMeal(imageBase64);
       logger.info("Meal analyzed", {menuName: mealAnalysis.menuName});
 
-      // 4. 過去の食事履歴を取得
+      // 5. 過去の食事履歴を取得
       const recentMeals = await getRecentMeals();
       logger.info("Recent meals fetched", {count: recentMeals.length});
 
-      // 5. くまパラメータを更新（履歴も考慮）
+      // 6. くまパラメータを更新（履歴も考慮）
       const existingParams = existingBear?.parameters || getInitialParameters();
       const newParams = updateBearParameters(existingParams, mealAnalysis, recentMeals);
       logger.info("Bear parameters updated", {bodyType: newParams.bodyType});
 
-      // 6. くま画像を生成
+      // 7. くま画像を生成
       const bearImageBuffer = await generateBearImage(newParams);
       logger.info("Bear image generated");
 
-      // 7. くま画像を Storage にアップロード
+      // 8. くま画像を Storage にアップロード
       const timestamp = Date.now();
       const bearImageUrl = await uploadImage(
         bearImageBuffer,
@@ -106,15 +120,15 @@ async function handleEvent(event: WebhookEvent): Promise<void> {
       );
       logger.info("Bear image uploaded", {url: bearImageUrl});
 
-      // 8. くまをDBに保存
+      // 9. くまをDBに保存
       const savedBear = await saveBear(bearImageUrl, newParams);
       logger.info("Bear saved", {bearId: savedBear.id});
 
-      // 9. 食事をDBに保存
+      // 10. 食事をDBに保存
       const savedMeal = await saveMeal(imageBase64, mealAnalysis, savedBear.id);
       logger.info("Meal saved", {mealId: savedMeal.id});
 
-      // 10. くま画像を LINE で返信（初回と2回目以降でメッセージを変える）
+      // 11. くま画像を pushMessage で送信（初回と2回目以降でメッセージを変える）
       const messages = isFirstTime ?
         [
           {
@@ -143,16 +157,17 @@ async function handleEvent(event: WebhookEvent): Promise<void> {
           },
         ];
 
-      await lineClient.replyMessage({
-        replyToken,
+      await lineClient.pushMessage({
+        to: userId,
         messages,
       });
+      logger.info("Sent bear image via pushMessage");
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       const errorStack = error instanceof Error ? error.stack : "";
       logger.error("Error processing image", {message: errorMessage, stack: errorStack});
-      await lineClient.replyMessage({
-        replyToken,
+      await lineClient.pushMessage({
+        to: userId,
         messages: [
           {
             type: "text",

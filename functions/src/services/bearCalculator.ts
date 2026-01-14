@@ -141,7 +141,7 @@ function calculateEnergy(
 function updatePersonality(
   current: string[],
   meal: MealAnalysis,
-  recentMeals: Meal[]
+  _recentMeals: Meal[]
 ): string[] {
   const newTraits: string[] = [];
 
