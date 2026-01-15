@@ -1,5 +1,5 @@
 import * as admin from "firebase-admin";
-import {Bear, BearParameters, INITIAL_BEAR_PARAMETERS} from "../models";
+import {Bear} from "../models";
 
 // Firebase Admin 初期化（まだの場合）
 if (!admin.apps.length) {
@@ -34,7 +34,6 @@ export async function getLatestBear(userId: string = TEST_USER_ID): Promise<Bear
     id: doc.id,
     userId: data.userId,
     imageUrl: data.imageUrl,
-    parameters: data.parameters as BearParameters,
     createdAt: data.createdAt.toDate(),
   };
 }
@@ -44,7 +43,6 @@ export async function getLatestBear(userId: string = TEST_USER_ID): Promise<Bear
  */
 export async function saveBear(
   imageUrl: string,
-  parameters: BearParameters,
   userId: string = TEST_USER_ID
 ): Promise<Bear> {
   const now = admin.firestore.Timestamp.now();
@@ -52,7 +50,6 @@ export async function saveBear(
   const docRef = await bearsCollection.add({
     userId,
     imageUrl,
-    parameters,
     createdAt: now,
   });
 
@@ -60,7 +57,6 @@ export async function saveBear(
     id: docRef.id,
     userId,
     imageUrl,
-    parameters,
     createdAt: now.toDate(),
   };
 }
@@ -73,9 +69,3 @@ export async function hasBear(userId: string = TEST_USER_ID): Promise<boolean> {
   return bear !== null;
 }
 
-/**
- * 初期くまパラメータを取得
- */
-export function getInitialParameters(): BearParameters {
-  return {...INITIAL_BEAR_PARAMETERS};
-}

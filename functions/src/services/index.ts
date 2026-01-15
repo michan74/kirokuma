@@ -1,6 +1,6 @@
 export {analyzeMeal} from "./mealAnalyzer";
-export {updateBearParameters} from "./bearCalculator";
+export {calculateBearParameters} from "./bearCalculator";
 export {generateBearImage, getBearPrompt} from "./bearGenerator";
 export {uploadImage} from "./storage";
-export {getLatestBear, saveBear, hasBear, getInitialParameters} from "./bearRepository";
+export {getLatestBear, saveBear, hasBear} from "./bearRepository";
 export {saveMeal, getRecentMeals, getMealCount} from "./mealRepository";

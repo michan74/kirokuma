@@ -1,5 +1,6 @@
 import {GoogleGenAI} from "@google/genai";
 import {MealAnalysis} from "../models";
+import {MEAL_ANALYSIS_PROMPT} from "../prompts";
 
 const PROJECT_ID = process.env.GCP_PROJECT_ID || "";
 const LOCATION = "us-central1";
@@ -9,30 +10,6 @@ const ai = new GoogleGenAI({
   project: PROJECT_ID,
   location: LOCATION,
 });
-
-const ANALYSIS_PROMPT = `
-この食事の写真を分析して、以下のJSON形式で回答してください。
-必ずJSONのみを返してください。説明文は不要です。
-
-{
-  "menuName": "料理名（例: 鮭の塩焼き定食）",
-  "ingredients": ["食材1", "食材2", "食材3"],
-  "colors": {
-    "#HEXコード": 割合（%）
-  },
-  "nutrition": {
-    "balance": 栄養バランススコア（0-100）,
-    "protein": タンパク質スコア（0-100）,
-    "vegetable": 野菜スコア（0-100）
-  },
-  "volume": "small" | "medium" | "large"
-}
-
-注意:
-- colorsは写真に写っている実際の色味を上位3色まで抽出（HEXコードと割合%）
-- nutritionは見た目から推定される栄養スコア
-- volumeは食事の量（少なめ/普通/多め）
-`;
 
 /**
  * 食事画像を分析してMealAnalysisを返す
@@ -50,7 +27,7 @@ export async function analyzeMeal(imageBase64: string): Promise<MealAnalysis> {
               data: imageBase64,
             },
           },
-          {text: ANALYSIS_PROMPT},
+          {text: MEAL_ANALYSIS_PROMPT},
         ],
       },
     ],

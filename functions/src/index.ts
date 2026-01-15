@@ -4,12 +4,11 @@ import * as logger from "firebase-functions/logger";
 import {messagingApi, WebhookEvent} from "@line/bot-sdk";
 import {
   analyzeMeal,
-  updateBearParameters,
+  calculateBearParameters,
   generateBearImage,
   uploadImage,
   getLatestBear,
   saveBear,
-  getInitialParameters,
   saveMeal,
   getRecentMeals,
 } from "./services";
@@ -97,19 +96,19 @@ async function handleEvent(event: WebhookEvent): Promise<void> {
 
       // 4. 食事を分析
       const mealAnalysis = await analyzeMeal(imageBase64);
-      logger.info("Meal analyzed", {menuName: mealAnalysis.menuName});
+      // mealAnalysis の内容をログに出力
+      logger.info("Meal analysis result", {mealAnalysis});
 
       // 5. 過去の食事履歴を取得
       const recentMeals = await getRecentMeals();
       logger.info("Recent meals fetched", {count: recentMeals.length});
 
-      // 6. くまパラメータを更新（履歴も考慮）
-      const existingParams = existingBear?.parameters || getInitialParameters();
-      const newParams = updateBearParameters(existingParams, mealAnalysis, recentMeals);
-      logger.info("Bear parameters updated", {bodyType: newParams.bodyType});
+      // 6. 累積パラメータを計算
+      const bearParams = calculateBearParameters(recentMeals);
+      logger.info("Bear parameters calculated", {bearParams});
 
       // 7. くま画像を生成
-      const bearImageBuffer = await generateBearImage(newParams);
+      const bearImageBuffer = await generateBearImage(bearParams, mealAnalysis);
       logger.info("Bear image generated");
 
       // 8. くま画像を Storage にアップロード
@@ -121,7 +120,7 @@ async function handleEvent(event: WebhookEvent): Promise<void> {
       logger.info("Bear image uploaded", {url: bearImageUrl});
 
       // 9. くまをDBに保存
-      const savedBear = await saveBear(bearImageUrl, newParams);
+      const savedBear = await saveBear(bearImageUrl);
       logger.info("Bear saved", {bearId: savedBear.id});
 
       // 10. 食事をDBに保存

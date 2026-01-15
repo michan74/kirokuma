@@ -9,45 +9,29 @@ export interface MealAnalysis {
   /** 食材リスト 例: ["鮭", "ご飯", "味噌汁", "漬物"] */
   ingredients: string[];
 
-  /** 写真の色味（上位3色） 例: { "#FA8072": 40, "#2E8B57": 30 } */
+  /** 料理の特徴 例: ["和風", "ヘルシー", "あっさり"] */
+  characteristics: string[];
+
+  /** 料理の色（上位3色 + 割合%） 例: { "#FA8072": 40, "#FFFFFF": 35, "#228B22": 25 } */
   colors: Record<string, number>;
 
-  /** 栄養スコア */
-  nutrition: {
-    /** 栄養バランススコア 0-100 */
-    balance: number;
-    /** タンパク質スコア 0-100 */
-    protein: number;
-    /** 野菜スコア 0-100 */
-    vegetable: number;
-  };
-
-  /** 食事量 */
-  volume: "small" | "medium" | "large";
+  /** 栄養素（上位5つ + 割合%） 例: { "タンパク質": 45, "炭水化物": 30, "ビタミン": 15 } */
+  nutrition: Record<string, number>;
 }
 
 /**
  * くまパラメータ
- * DBに累積保存される、くまの状態を表すパラメータ
+ * 過去の食事から累積計算され、画像生成プロンプトに渡すデータ
  */
 export interface BearParameters {
-  /** 累積された色 例: { "#FA8072": 35, "#2E8B57": 25 } */
+  /** 累積された料理の色（上位5色 + 割合%） 例: { "#FA8072": 30, "#FFFFFF": 25, ... } */
   colors: Record<string, number>;
 
-  /** 体型 0-100（0:スリム, 100:ぽっちゃり） */
-  bodyType: number;
+  /** 累積された栄養素（上位5つ + 割合%） 例: { "タンパク質": 35, "炭水化物": 30, ... } */
+  nutrition: Record<string, number>;
 
-  /** 筋肉 0-100 */
-  muscle: number;
-
-  /** 元気度 0-100 */
-  energy: number;
-
-  /** 性格特徴 例: ["和風", "健康的"] */
-  personality: string[];
-
-  /** アクセサリ 例: ["鮭模様", "緑の葉っぱ"] */
-  accessories: string[];
+  /** 累積された特徴（重複排除） 例: ["和風", "ヘルシー", "あっさり"] */
+  characteristics: string[];
 }
 
 /**
@@ -56,11 +40,8 @@ export interface BearParameters {
  */
 export const INITIAL_BEAR_PARAMETERS: BearParameters = {
   colors: {},
-  bodyType: 50,
-  muscle: 50,
-  energy: 50,
-  personality: [],
-  accessories: [],
+  nutrition: {},
+  characteristics: [],
 };
 
 /**
@@ -79,7 +60,6 @@ export interface Bear {
   id: string;
   userId: string;
   imageUrl: string;
-  parameters: BearParameters;
   createdAt: Date;
 }
 
