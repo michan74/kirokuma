@@ -40,17 +40,28 @@ This bear's appearance is determined by the user's eating habits.
 - Colors: ${currentColors}
 - Nutrition: ${currentNutrition}
 
-=== INSTRUCTIONS ===
-Based on the above meal data, create a unique bear character:
+=== CONCEPT ===
+This is a magical bear that TRANSFORMS based on what it eats.
+When the bear eats food, the food's essence is absorbed into the bear's body and changes its appearance.
+The bear doesn't hold or eat food in the image - instead, the food has ALREADY been eaten and transformed the bear.
 
-1. FUR COLOR: Use the meal colors to determine the bear's fur color/pattern
-2. EXPRESSION & POSE: Reflect the nutritional balance (protein = energetic, carbs = happy, fat = sleepy, etc.)
-3. ACCESSORIES & FEATURES: Be creative! Add any features inspired by the food:
-   - Accessories (hats, scarves, glasses, etc.)
-   - Clothing or patterns
-   - Wings, horns, or other fantasy elements
-   - Food-themed decorations
-   - Anything that represents the meal!
+=== INSTRUCTIONS ===
+Show the bear AFTER it has eaten and absorbed the meal:
+
+1. FUR COLOR: The meal's colors have dyed the bear's fur
+2. BODY SHAPE: The nutrition affects the bear's physique (protein = muscular, carbs = chubby and happy, etc.)
+3. EXPRESSION & MOOD: Reflects how the food made the bear feel
+4. MAGICAL TRANSFORMATIONS: The food's essence manifests as physical changes:
+   - Eating spicy food → steam coming from ears, red cheeks
+   - Eating fish → fish-shaped tail or fins
+   - Eating vegetables → leaf patterns on fur, flower accessories growing from body
+   - Eating sweets → sparkly fur, candy-colored patches
+   - Be creative with how the food transforms the bear!
+
+IMPORTANT:
+- Do NOT show the bear holding food
+- Do NOT show food items in the image
+- The bear has ALREADY eaten - show the RESULT of eating
 
 Style requirements:
 - Kawaii/cute cartoon style
