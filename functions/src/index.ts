@@ -4,10 +4,8 @@ import * as logger from "firebase-functions/logger";
 import {messagingApi, WebhookEvent} from "@line/bot-sdk";
 import {
   analyzeMeal,
-  calculateBearParameters,
   generateBearImage,
   uploadImage,
-  getLatestBear,
   saveBear,
   saveMeal,
   getRecentMeals,
@@ -89,26 +87,18 @@ async function handleEvent(event: WebhookEvent): Promise<void> {
       const imageBase64 = imageBuffer.toString("base64");
       logger.info("Image downloaded", {size: imageBuffer.length});
 
-      // 3. 既存のくまを取得（初回かどうかの判定）
-      const existingBear = await getLatestBear();
-      const isFirstTime = existingBear === null;
-      logger.info("Bear check", {isFirstTime, existingBearId: existingBear?.id});
-
-      // 4. 食事を分析
+      // 3. 食事を分析
       const mealAnalysis = await analyzeMeal(imageBase64);
-      // mealAnalysis の内容をログに出力
       logger.info("Meal analysis result", {mealAnalysis});
 
-      // 5. 過去の食事履歴を取得
+      // 4. 過去7日分の食事履歴を取得
       const recentMeals = await getRecentMeals();
-      logger.info("Recent meals fetched", {count: recentMeals.length});
+      const pastMealAnalyses = recentMeals.map((meal) => meal.analyzedData);
+      logger.info("Past meals fetched", {count: pastMealAnalyses.length});
 
-      // 6. 累積パラメータを計算
-      const bearParams = calculateBearParameters(recentMeals);
-      logger.info("Bear parameters calculated", {bearParams});
-
-      // 7. くま画像を生成
-      const bearImageBuffer = await generateBearImage(bearParams, mealAnalysis);
+      // 5. 今日の食事を含めた全食事履歴でくま画像を生成
+      const allMeals = [...pastMealAnalyses, mealAnalysis];
+      const bearImageBuffer = await generateBearImage(allMeals);
       logger.info("Bear image generated");
 
       // 8. くま画像を Storage にアップロード
@@ -128,15 +118,12 @@ async function handleEvent(event: WebhookEvent): Promise<void> {
       logger.info("Meal saved", {mealId: savedMeal.id});
 
       // 11. くま画像を pushMessage で送信（初回と2回目以降でメッセージを変える）
+      const isFirstTime = pastMealAnalyses.length === 0;
       const messages = isFirstTime ?
         [
           {
             type: "text" as const,
-            text: "🎉 くまが生まれたよ！\nこれから一緒に食事を記録していこうね！",
-          },
-          {
-            type: "text" as const,
-            text: `最初のごはんは${mealAnalysis.menuName}だね！🐻`,
+            text: "くまが生まれたよ！\nこれから一緒に食事を記録していこうね！",
           },
           {
             type: "image" as const,
@@ -147,7 +134,7 @@ async function handleEvent(event: WebhookEvent): Promise<void> {
         [
           {
             type: "text" as const,
-            text: `${mealAnalysis.menuName}を食べたね！🐻`,
+            text: "うまうま！",
           },
           {
             type: "image" as const,

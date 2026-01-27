@@ -1,5 +1,5 @@
 import {GoogleGenAI} from "@google/genai";
-import {BearParameters, MealAnalysis} from "../models";
+import {MealAnalysis} from "../models";
 import {buildBearPrompt} from "../prompts";
 
 const PROJECT_ID = process.env.GCP_PROJECT_ID || "";
@@ -12,13 +12,12 @@ const ai = new GoogleGenAI({
 });
 
 /**
- * くまパラメータと今回の食事から画像を生成する（Gemini 2.5 Flash Image）
+ * 過去の食事履歴からくま画像を生成する
  */
 export async function generateBearImage(
-  params: BearParameters,
-  currentMeal: MealAnalysis
+  meals: MealAnalysis[]
 ): Promise<Buffer> {
-  const prompt = buildBearPrompt(params, currentMeal);
+  const prompt = buildBearPrompt(meals);
 
   const response = await ai.models.generateContent({
     model: "gemini-2.5-flash-image",
@@ -33,7 +32,14 @@ export async function generateBearImage(
     },
   });
 
-  // レスポンスから画像データを取得
+  return extractImageFromResponse(response);
+}
+
+/**
+ * レスポンスから画像データを抽出
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function extractImageFromResponse(response: any): Buffer {
   const parts = response.candidates?.[0]?.content?.parts;
   const imagePart = parts?.find((part: {inlineData?: {data?: string}}) => part.inlineData?.data);
   const imageData = imagePart?.inlineData?.data;
@@ -43,14 +49,4 @@ export async function generateBearImage(
   }
 
   return Buffer.from(imageData, "base64");
-}
-
-/**
- * プロンプトを取得（デバッグ用）
- */
-export function getBearPrompt(
-  params: BearParameters,
-  currentMeal: MealAnalysis
-): string {
-  return buildBearPrompt(params, currentMeal);
 }

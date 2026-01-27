@@ -13,32 +13,6 @@ const bearsCollection = db.collection("bears");
 const TEST_USER_ID = "test-user";
 
 /**
- * ユーザーの最新のくまを取得
- * 存在しない場合は null を返す
- */
-export async function getLatestBear(userId: string = TEST_USER_ID): Promise<Bear | null> {
-  const snapshot = await bearsCollection
-    .where("userId", "==", userId)
-    .orderBy("createdAt", "desc")
-    .limit(1)
-    .get();
-
-  if (snapshot.empty) {
-    return null;
-  }
-
-  const doc = snapshot.docs[0];
-  const data = doc.data();
-
-  return {
-    id: doc.id,
-    userId: data.userId,
-    imageUrl: data.imageUrl,
-    createdAt: data.createdAt.toDate(),
-  };
-}
-
-/**
  * 新しいくまを保存
  */
 export async function saveBear(
@@ -60,12 +34,3 @@ export async function saveBear(
     createdAt: now.toDate(),
   };
 }
-
-/**
- * ユーザーがくまを持っているかチェック（初回判定用）
- */
-export async function hasBear(userId: string = TEST_USER_ID): Promise<boolean> {
-  const bear = await getLatestBear(userId);
-  return bear !== null;
-}
-
