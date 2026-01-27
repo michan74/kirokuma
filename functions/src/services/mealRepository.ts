@@ -4,9 +4,6 @@ import {Meal, MealAnalysis} from "../models";
 const db = admin.firestore();
 const mealsCollection = db.collection("meals");
 
-// 仮実装用の固定ユーザーID
-const TEST_USER_ID = "test-user";
-
 /**
  * 食事分析結果を保存
  */
@@ -14,7 +11,7 @@ export async function saveMeal(
   imageUrl: string,
   analyzedData: MealAnalysis,
   bearId: string,
-  userId: string = TEST_USER_ID
+  userId: string
 ): Promise<Meal> {
   const now = admin.firestore.Timestamp.now();
 
@@ -40,7 +37,7 @@ export async function saveMeal(
  * ユーザーの直近N日間の食事履歴を取得
  */
 export async function getRecentMeals(
-  userId: string = TEST_USER_ID,
+  userId: string,
   days = 7
 ): Promise<Meal[]> {
   const startDate = new Date();
@@ -69,7 +66,7 @@ export async function getRecentMeals(
 /**
  * ユーザーの食事回数を取得
  */
-export async function getMealCount(userId: string = TEST_USER_ID): Promise<number> {
+export async function getMealCount(userId: string): Promise<number> {
   const snapshot = await mealsCollection
     .where("userId", "==", userId)
     .count()

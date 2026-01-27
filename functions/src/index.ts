@@ -92,7 +92,7 @@ async function handleEvent(event: WebhookEvent): Promise<void> {
       logger.info("Meal analysis result", {mealAnalysis});
 
       // 4. 過去7日分の食事履歴を取得
-      const recentMeals = await getRecentMeals();
+      const recentMeals = await getRecentMeals(userId);
       const pastMealAnalyses = recentMeals.map((meal) => meal.analyzedData);
       logger.info("Past meals fetched", {count: pastMealAnalyses.length});
 
@@ -110,11 +110,11 @@ async function handleEvent(event: WebhookEvent): Promise<void> {
       logger.info("Bear image uploaded", {url: bearImageUrl});
 
       // 9. くまをDBに保存
-      const savedBear = await saveBear(bearImageUrl);
+      const savedBear = await saveBear(bearImageUrl, userId);
       logger.info("Bear saved", {bearId: savedBear.id});
 
       // 10. 食事をDBに保存
-      const savedMeal = await saveMeal(imageBase64, mealAnalysis, savedBear.id);
+      const savedMeal = await saveMeal(imageBase64, mealAnalysis, savedBear.id, userId);
       logger.info("Meal saved", {mealId: savedMeal.id});
 
       // 11. くま画像を pushMessage で送信（初回と2回目以降でメッセージを変える）

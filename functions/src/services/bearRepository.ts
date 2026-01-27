@@ -9,15 +9,12 @@ if (!admin.apps.length) {
 const db = admin.firestore();
 const bearsCollection = db.collection("bears");
 
-// 仮実装用の固定ユーザーID
-const TEST_USER_ID = "test-user";
-
 /**
  * 新しいくまを保存
  */
 export async function saveBear(
   imageUrl: string,
-  userId: string = TEST_USER_ID
+  userId: string
 ): Promise<Bear> {
   const now = admin.firestore.Timestamp.now();
 
