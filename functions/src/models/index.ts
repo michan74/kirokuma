@@ -1,13 +1,34 @@
 /**
+ * 料理カテゴリ
+ */
+export type DishCategory = "main" | "side" | "staple" | "soup";
+
+/**
+ * 量
+ */
+export type Portion = "small" | "medium" | "large";
+
+/**
+ * 1つの料理
+ */
+export interface Dish {
+  /** 料理名 例: "鮭の塩焼き" */
+  name: string;
+  /** カテゴリ */
+  category: DishCategory;
+  /** 食材リスト */
+  ingredients: string[];
+  /** 量 */
+  portion: Portion;
+}
+
+/**
  * 食事分析結果
  * Gemini が食事画像から抽出する情報
  */
 export interface MealAnalysis {
-  /** メニュー名 例: "鮭の塩焼き定食" */
-  menuName: string;
-
-  /** 食材リスト 例: ["鮭", "ご飯", "味噌汁", "漬物"] */
-  ingredients: string[];
+  /** 料理リスト（1回の食事に複数の料理） */
+  dishes: Dish[];
 }
 
 /**
