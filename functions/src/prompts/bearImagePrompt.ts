@@ -4,32 +4,11 @@ import {MealAnalysis, DishCategory, Portion} from "../models";
  * スタイル定義 - 粘土ミニチュア風の部屋
  */
 const STYLE = `
-Style:
-- Clay/polymer clay miniature style
-- Soft, handcrafted texture like claymation
-- Interior room view only - no exterior visible
-- Cozy, dreamy atmosphere
-- Pastel and warm color palette
-- ABSOLUTELY NO TEXT, NO LETTERS, NO WORDS, NO WATERMARK, NO LABELS anywhere in the image
-
-Composition (VERY IMPORTANT - MUST FOLLOW):
-- We are INSIDE the room, not looking at it from outside
-- Camera position: inside the room, facing the back wall
-- Visible: back wall, left wall, right wall, ceiling, floor - ALL from the INSIDE
-- The walls/ceiling/floor extend to the edges of the image
-- NO exterior of the room visible - NO outside frame, NO box outline, NO diorama edge
-- Think of it as a screenshot from inside a room in a video game
-- Flat front view, no diagonal angle
-`.trim();
-
-const RULES = `
-CRITICAL RULES (MUST FOLLOW):
-- NO actual food in the image - no real dishes, plates, or edible items
-- NO eating scenes - the bear is doing an ACTIVITY in its room
-- The bear must be doing something: hobby, housework, exercise, daily life activity
-- Express meals ABSTRACTLY through: colors, cultural style, mood, lifestyle, abstract patterns
-- Literal food shapes ONLY for items marked as [DOMINANT] in the influence list
-- Bear's fur: soft natural tones with meal-inspired hues (gentle pink, soft green, warm orange)
+Style: Snow globe with clay miniature inside
+- Glass dome on decorative base, viewed from outside
+- Corner angle showing TWO walls (L-shape), isometric perspective
+- Clay/polymer texture, pastel colors, soft dreamy lighting
+- NO TEXT, NO WATERMARK anywhere
 `.trim();
 
 /** カテゴリごとの重み */
@@ -49,6 +28,89 @@ const PORTION_WEIGHTS: Record<Portion, number> = {
 
 /** 影響度のしきい値 */
 const DOMINANT_THRESHOLD = 5.0;
+
+/** 部屋の充実度段階の定義 */
+type RoomStage = 1 | 2 | 3 | 4 | 5;
+
+interface RoomStageInfo {
+  stage: RoomStage;
+  name: string;
+  furniture: string;
+}
+
+const ROOM_STAGES: Record<RoomStage, Omit<RoomStageInfo, "stage">> = {
+  1: {
+    name: "はじまりの部屋",
+    furniture: `
+- Nearly empty room - just starting out
+- Single bare light bulb hanging from ceiling
+- Plain walls with no decoration
+- Simple wooden floor
+- Only TWO small items (style based on meals eaten)`.trim(),
+  },
+  2: {
+    name: "少し落ち着いた",
+    furniture: `
+- Small table and one chair
+- Simple lamp replacing bare bulb
+- One or two small decorations
+- Maybe one small plant
+- Basic rug on floor`.trim(),
+  },
+  3: {
+    name: "生活感が出てきた",
+    furniture: `
+- Sofa or comfortable seating
+- Shelves with some items
+- Curtains on windows
+- Several plants
+- Proper ceiling light
+- Rug and some textiles`.trim(),
+  },
+  4: {
+    name: "充実してきた",
+    furniture: `
+- Full furniture set
+- Art on the walls
+- Nice rug and textiles
+- Decorative lighting
+- Personal items and hobbies visible`.trim(),
+  },
+  5: {
+    name: "こだわりの空間",
+    furniture: `
+- Fully furnished, cozy space
+- Collections and hobby items displayed
+- Quality furniture and decor
+- Personal touches everywhere
+- Warm, lived-in atmosphere`.trim(),
+  },
+};
+
+/** クマの基本設定（固定） */
+const BEAR_BASE = `
+Young bear, cute and fluffy, doing an activity in its room.
+Outfit style influenced by meals eaten.
+`.trim();
+
+/**
+ * 食事回数から部屋の充実度を計算
+ */
+function calculateRoomStage(mealCount: number): RoomStageInfo {
+  let stage: RoomStage;
+  if (mealCount <= 6) {
+    stage = 1;
+  } else if (mealCount <= 15) {
+    stage = 2;
+  } else if (mealCount <= 27) {
+    stage = 3;
+  } else if (mealCount <= 39) {
+    stage = 4;
+  } else {
+    stage = 5;
+  }
+  return {stage, ...ROOM_STAGES[stage]};
+}
 
 interface IngredientInfluence {
   name: string;
@@ -84,96 +146,37 @@ function calculateInfluence(meals: MealAnalysis[]): IngredientInfluence[] {
 }
 
 /**
- * 影響度リストをフォーマット
- */
-function formatInfluenceList(influences: IngredientInfluence[]): string {
-  return influences
-    .map((i) => `- ${i.name}: ${i.score}${i.isDominant ? " [DOMINANT]" : ""}`)
-    .join("\n");
-}
-
-/**
- * 食事履歴をフォーマット
- */
-function formatMealHistory(meals: MealAnalysis[]): string {
-  return meals
-    .map((meal) => {
-      const dishes = meal.dishes
-        .map((d) => `${d.name}(${d.category}, ${d.portion})`)
-        .join(", ");
-      return `- ${dishes}`;
-    })
-    .join("\n");
-}
-
-/**
  * くま画像生成用プロンプト
- * 過去7日分の食事履歴からくまと部屋を生成
+ * 食事履歴と食事回数からくまと部屋を生成
+ * @param meals 過去7日分の食事履歴
+ * @param totalMealCount 総食事回数（成長段階の計算に使用）
  */
-export function buildBearPrompt(meals: MealAnalysis[]): string {
-  const mealHistory = formatMealHistory(meals);
+export function buildBearPrompt(meals: MealAnalysis[], totalMealCount: number): string {
+  const roomStage = calculateRoomStage(totalMealCount);
   const influences = calculateInfluence(meals);
-  const influenceList = formatInfluenceList(influences);
-  const dominantItems = influences.filter((i) => i.isDominant);
+
+  // 食事の影響を簡潔に（上位5つ）
+  const mealInfluence = meals.length > 0 ?
+    influences.slice(0, 5).map((i) => `${i.name}${i.isDominant ? "[DOMINANT]" : ""}`).join(", ") :
+    "none";
 
   return `
-Generate a view INSIDE a clay miniature room. We are INSIDE the room looking at the walls. NO exterior visible.
+⚠️ CRITICAL: NO FOOD, NO TEXT in image. No dishes, plates, letters, or words. Express meals through style only.
 
-=== Meal History (past 7 days) ===
-${mealHistory}
+Snow globe with bear's miniature room inside.
+${BEAR_BASE}
 
-=== Ingredient Influence Scores ===
-${influenceList}
+Room level: ${roomStage.stage}/5 (${totalMealCount} meals)
+${roomStage.furniture}
 
-=== Concept ===
-This magical bear and its entire living space are shaped by what it eats.
-Create a complete scene: the bear AND its room should reflect the meal history.
-The whole image should look like a tiny clay/polymer clay miniature world.
-
-=== How to express meal influence (ABSTRACT, not literal) ===
-
-Express through CONCEPTS, not food shapes:
-- COLOR: Warm meals → warm tones (orange, red). Fresh meals → cool tones (green, blue)
-- CULTURE: Japanese food → tatami, shoji. Italian → terracotta, arches. American → cozy cabin
-- LIFESTYLE: Healthy food → sporty, active vibe. Comfort food → cozy, relaxed vibe
-- PATTERNS: Abstract only (waves, stripes, dots, gradients) - NOT food shapes
-
-=== What to include ===
-1. THE BEAR (doing an activity):
-   - Fur in soft natural tones with meal-inspired hues
-   - Outfit reflecting cultural lifestyle (kimono, sweater, sporty wear, etc.)
-   - MUST be doing an activity that matches the meal's culture/lifestyle:
-     * Hobby: reading, crafting, painting, playing music, gardening
-     * Housework: cleaning, organizing, sewing, arranging flowers
-     * Exercise: yoga, stretching, dancing
-     * Daily life: relaxing on sofa, looking out window, playing with pet
-
-2. THE ROOM (square room, 3 walls visible):
-   - Back wall + left wall + right wall with wallpaper/decorations
-   - Ceiling with lighting fixture (lamp, pendant light, etc.)
-   - Floor with flooring/rug matching the theme
-   - Architecture style matching the food's cultural origin
-   - Furniture style (tatami, fireplace, modern, rustic)
-   - Color palette inspired by meals
-
-3. THE ATMOSPHERE:
-   - Cozy, lived-in feeling
-   - Warm lighting, clay/handmade texture
-
-=== DOMINANT ingredients (literal motifs allowed) ===
-${dominantItems.length > 0 ?
-    dominantItems.map((i) => `- ${i.name} (score: ${i.score}) → can appear as literal motif`).join("\n") :
-    "None - use only abstract expressions"}
-
-=== Examples (normal case - abstract influence) ===
-- Japanese meals → tatami floor, shoji walls, paper lantern, bear in kimono doing calligraphy
-- Italian meals → terracotta walls, arched details, pendant lamp, bear watering plants
-- Fresh/healthy meals → white walls, large window, modern light, bear doing yoga
-- Comfort/hearty meals → wooden walls, fireplace, warm lamp, bear in sweater reading
-- Seafood meals → blue-white walls, porthole window, nautical lamp, bear painting
-
-${RULES}
+${meals.length > 0 ? `
+Meal influence: ${mealInfluence}
+→ These affect STYLE of clothes, furniture, wallpaper (culture, colors, patterns)
+→ DOMINANT items can appear as motifs (e.g. tomato pattern on cushion)
+` : "No meals yet → neutral style, simple plain items"}
 
 ${STYLE}
+
+⚠️ REMINDER: NO FOOD, NO TEXT - the bear is doing an activity, NOT eating.
 `.trim();
 }

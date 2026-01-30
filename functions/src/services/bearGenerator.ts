@@ -13,11 +13,14 @@ const ai = new GoogleGenAI({
 
 /**
  * 過去の食事履歴からくま画像を生成する
+ * @param meals 過去7日分の食事履歴
+ * @param totalMealCount 総食事回数（成長段階の計算に使用）
  */
 export async function generateBearImage(
-  meals: MealAnalysis[]
+  meals: MealAnalysis[],
+  totalMealCount: number
 ): Promise<Buffer> {
-  const prompt = buildBearPrompt(meals);
+  const prompt = buildBearPrompt(meals, totalMealCount);
 
   const response = await ai.models.generateContent({
     model: "gemini-2.5-flash-image",

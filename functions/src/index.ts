@@ -9,6 +9,7 @@ import {
   saveBear,
   saveMeal,
   getRecentMeals,
+  getMealCount,
 } from "./services";
 
 setGlobalOptions({maxInstances: 10});
@@ -96,9 +97,14 @@ async function handleEvent(event: WebhookEvent): Promise<void> {
       const pastMealAnalyses = recentMeals.map((meal) => meal.analyzedData);
       logger.info("Past meals fetched", {count: pastMealAnalyses.length});
 
-      // 5. 今日の食事を含めた全食事履歴でくま画像を生成
+      // 5. 総食事回数を取得（成長段階の計算用）
+      const currentMealCount = await getMealCount(userId);
+      const totalMealCount = currentMealCount + 1; // 今回の食事を含める
+      logger.info("Total meal count", {totalMealCount});
+
+      // 6. 今日の食事を含めた全食事履歴でくま画像を生成
       const allMeals = [...pastMealAnalyses, mealAnalysis];
-      const bearImageBuffer = await generateBearImage(allMeals);
+      const bearImageBuffer = await generateBearImage(allMeals, totalMealCount);
       logger.info("Bear image generated");
 
       // 8. くま画像を Storage にアップロード
