@@ -6,7 +6,9 @@ import {
   analyzeMeal,
   generateBearImage,
   uploadImage,
+  downloadImageAsBase64,
   saveBear,
+  getLatestBear,
   saveMeal,
   getRecentMeals,
   getMealCount,
@@ -102,12 +104,20 @@ async function handleEvent(event: WebhookEvent): Promise<void> {
       const totalMealCount = currentMealCount + 1; // 今回の食事を含める
       logger.info("Total meal count", {totalMealCount});
 
-      // 6. 今日の食事を含めた全食事履歴でくま画像を生成
+      // 6. 前のクマ画像を取得（あれば）
+      let previousBearImageBase64: string | undefined;
+      const latestBear = await getLatestBear(userId);
+      if (latestBear) {
+        previousBearImageBase64 = await downloadImageAsBase64(latestBear.imageUrl);
+        logger.info("Previous bear image fetched", {bearId: latestBear.id});
+      }
+
+      // 7. 今日の食事を含めた全食事履歴でくま画像を生成
       const allMeals = [...pastMealAnalyses, mealAnalysis];
-      const bearImageBuffer = await generateBearImage(allMeals, totalMealCount);
+      const bearImageBuffer = await generateBearImage(allMeals, totalMealCount, previousBearImageBase64);
       logger.info("Bear image generated");
 
-      // 8. くま画像を Storage にアップロード
+      // 8. くま画像をStorageにアップロード
       const timestamp = Date.now();
       const bearImageUrl = await uploadImage(
         bearImageBuffer,

@@ -29,3 +29,19 @@ export async function uploadImage(
   // 公開 URL を返す
   return `https://storage.googleapis.com/${bucket.name}/${path}`;
 }
+
+/**
+ * Storage から画像をダウンロードして Base64 文字列を返す
+ */
+export async function downloadImageAsBase64(imageUrl: string): Promise<string> {
+  // URL からパスを抽出
+  const prefix = `https://storage.googleapis.com/${bucket.name}/`;
+  if (!imageUrl.startsWith(prefix)) {
+    throw new Error(`Invalid storage URL: ${imageUrl}`);
+  }
+  const filePath = imageUrl.slice(prefix.length);
+
+  const file = bucket.file(filePath);
+  const [buffer] = await file.download();
+  return buffer.toString("base64");
+}

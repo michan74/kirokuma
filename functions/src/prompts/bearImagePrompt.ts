@@ -1,33 +1,40 @@
-import {MealAnalysis, DishCategory, Portion} from "../models";
+import {RoomStyle} from "../models";
 
 /**
  * スタイル定義 - 粘土ミニチュア風の部屋
  */
+const COMPOSITION = `
+⚠️ COMPOSITION (MUST FOLLOW):
+- FRONT VIEW ONLY - camera faces the back wall directly
+- THREE walls visible: back wall (center) + left wall + right wall
+- Floor and ceiling also visible
+- Like a theater stage or dollhouse with front wall removed
+- ❌ NO diagonal angle, NO corner view, NO isometric view
+`.trim();
+
 const STYLE = `
-Style: Snow globe with clay miniature inside
-- Glass dome on decorative base, viewed from outside
-- Corner angle showing TWO walls (L-shape), isometric perspective
-- Clay/polymer texture, pastel colors, soft dreamy lighting
+Style:
+- Clay/polymer texture, pastel colors, soft cozy lighting
 - NO TEXT, NO WATERMARK anywhere
 `.trim();
 
-/** カテゴリごとの重み */
-const CATEGORY_WEIGHTS: Record<DishCategory, number> = {
-  main: 1.5,
-  side: 1.0,
-  staple: 0.3, // 毎日食べるので低め
-  soup: 0.5,
-};
-
-/** 量ごとの重み */
-const PORTION_WEIGHTS: Record<Portion, number> = {
-  small: 0.5,
-  medium: 1.0,
-  large: 1.5,
-};
-
-/** 影響度のしきい値 */
-const DOMINANT_THRESHOLD = 5.0;
+const IMAGE_CONSTRAINTS = `
+Image constraints (MUST FOLLOW):
+- Do NOT change the canvas dimensions or add borders/margins/padding to the canvas.
+- Preserve the reference image size exactly. Output should use the same canvas size.
+- Allow the bear to be positioned freely in the room. Examples:
+  - left, right, near the window
+  - lying on the floor, on the bed
+  - jumping, bathing, playing
+- The bear must remain fully visible within the canvas (no cropping of the subject).
+- Keep the subject reasonably large so it is the focal point.
+  - Exact centering is NOT required.
+- If the bear is positioned off-center, adjust background elements subtly (scale/shift).
+- Ensure the overall composition remains natural and the bear is not tiny.
+- Do NOT add transparent padding, borders, or extend the canvas.
+- Treat the provided reference image as a strict layout template for camera angle and perspective.
+  Only modify contents inside the scene (objects, bear pose, scale); do not change camera geometry.
+`.trim();
 
 /** 部屋の充実度段階の定義 */
 type RoomStage = 1 | 2 | 3 | 4 | 5;
@@ -35,68 +42,36 @@ type RoomStage = 1 | 2 | 3 | 4 | 5;
 interface RoomStageInfo {
   stage: RoomStage;
   name: string;
-  furniture: string;
+  furnitureAmount: string;
 }
 
 const ROOM_STAGES: Record<RoomStage, Omit<RoomStageInfo, "stage">> = {
   1: {
     name: "はじまりの部屋",
-    furniture: `
-- Nearly empty room - just starting out
-- Single bare light bulb hanging from ceiling
-- Plain walls with no decoration
-- Simple wooden floor
-- Only TWO small items (style based on meals eaten)`.trim(),
+    furnitureAmount: "Nearly empty - only TWO small items",
   },
   2: {
     name: "少し落ち着いた",
-    furniture: `
-- Small table and one chair
-- Simple lamp replacing bare bulb
-- One or two small decorations
-- Maybe one small plant
-- Basic rug on floor`.trim(),
+    furnitureAmount: "Small table, one chair, simple lamp, basic rug",
   },
   3: {
     name: "生活感が出てきた",
-    furniture: `
-- Sofa or comfortable seating
-- Shelves with some items
-- Curtains on windows
-- Several plants
-- Proper ceiling light
-- Rug and some textiles`.trim(),
+    furnitureAmount: "Sofa, shelves, curtains, plants, proper ceiling light",
   },
   4: {
     name: "充実してきた",
-    furniture: `
-- Full furniture set
-- Art on the walls
-- Nice rug and textiles
-- Decorative lighting
-- Personal items and hobbies visible`.trim(),
+    furnitureAmount: "Full furniture set, art on walls, decorative lighting",
   },
   5: {
     name: "こだわりの空間",
-    furniture: `
-- Fully furnished, cozy space
-- Collections and hobby items displayed
-- Quality furniture and decor
-- Personal touches everywhere
-- Warm, lived-in atmosphere`.trim(),
+    furnitureAmount: "Fully furnished, collections displayed, personal touches everywhere",
   },
 };
-
-/** クマの基本設定（固定） */
-const BEAR_BASE = `
-Young bear, cute and fluffy, doing an activity in its room.
-Outfit style influenced by meals eaten.
-`.trim();
 
 /**
  * 食事回数から部屋の充実度を計算
  */
-function calculateRoomStage(mealCount: number): RoomStageInfo {
+export function calculateRoomStage(mealCount: number): RoomStageInfo {
   let stage: RoomStage;
   if (mealCount <= 6) {
     stage = 1;
@@ -112,71 +87,85 @@ function calculateRoomStage(mealCount: number): RoomStageInfo {
   return {stage, ...ROOM_STAGES[stage]};
 }
 
-interface IngredientInfluence {
-  name: string;
-  score: number;
-  isDominant: boolean;
-}
-
 /**
- * 食材ごとの影響度を計算
+ * Step2: 部屋スタイルからくま画像を生成するプロンプト
+ * 食材名は含まれない - RoomStyleのみを使用
  */
-function calculateInfluence(meals: MealAnalysis[]): IngredientInfluence[] {
-  const scores: Record<string, number> = {};
-
-  for (const meal of meals) {
-    for (const dish of meal.dishes) {
-      const categoryWeight = CATEGORY_WEIGHTS[dish.category];
-      const portionWeight = PORTION_WEIGHTS[dish.portion];
-      const dishScore = categoryWeight * portionWeight;
-
-      for (const ingredient of dish.ingredients) {
-        scores[ingredient] = (scores[ingredient] || 0) + dishScore;
-      }
-    }
-  }
-
-  return Object.entries(scores)
-    .map(([name, score]) => ({
-      name,
-      score: Math.round(score * 10) / 10,
-      isDominant: score >= DOMINANT_THRESHOLD,
-    }))
-    .sort((a, b) => b.score - a.score);
-}
-
-/**
- * くま画像生成用プロンプト
- * 食事履歴と食事回数からくまと部屋を生成
- * @param meals 過去7日分の食事履歴
- * @param totalMealCount 総食事回数（成長段階の計算に使用）
- */
-export function buildBearPrompt(meals: MealAnalysis[], totalMealCount: number): string {
+export function buildBearImagePrompt(roomStyle: RoomStyle, totalMealCount: number): string {
   const roomStage = calculateRoomStage(totalMealCount);
-  const influences = calculateInfluence(meals);
+  // Build modular prompt parts
+  const furniturePart = buildFurniturePrompt(roomStyle, roomStage);
+  const wallpaperFloorPart = buildWallpaperFloorPrompt(roomStyle);
+  const bearFeaturesPart = buildBearFeaturesPrompt(roomStyle);
 
-  // 食事の影響を簡潔に（上位5つ）
-  const mealInfluence = meals.length > 0 ?
-    influences.slice(0, 5).map((i) => `${i.name}${i.isDominant ? "[DOMINANT]" : ""}`).join(", ") :
-    "none";
+  return [
+    "⚠️ CRITICAL: NO FOOD, NO TEXT in image. No dishes, plates, letters, or words anywhere.",
+    "Generate a clay miniature diorama of a young bear's room.",
+    bearFeaturesPart,
+    `=== Room (Level ${roomStage.stage}/5) ===`,
+    furniturePart,
+    wallpaperFloorPart,
+    COMPOSITION,
+    STYLE,
+    IMAGE_CONSTRAINTS,
+    "⚠️ REMINDER: NO FOOD, NO TEXT. FRONT VIEW with 3 walls visible. Bear doing activity.",
+  ].join("\n\n").trim();
+}
 
-  return `
-⚠️ CRITICAL: NO FOOD, NO TEXT in image. No dishes, plates, letters, or words. Express meals through style only.
+/**
+ * Build prompt for furniture generation (amount, major furniture, decorative items)
+ */
+export function buildFurniturePrompt(roomStyle: RoomStyle, roomStage: ReturnType<typeof calculateRoomStage>): string {
+  return `- Furniture amount: ${roomStage.furnitureAmount}
+- Furniture style: ${roomStyle.furnitureStyle}
+- Rug: ${roomStyle.rug}
+- Suggested items: suggest appropriate items matching the furniture amount and style (e.g. table, chair, sofa)
+- Suggested small props: shelves, lamp, plants
+- Arrange items naturally for a cozy clay miniature scene`;
+}
 
-Snow globe with bear's miniature room inside.
-${BEAR_BASE}
+/**
+ * Build prompt for wallpaper and floor generation
+ */
+export function buildWallpaperFloorPrompt(roomStyle: RoomStyle): string {
+  return `- Wallpaper: ${roomStyle.wallpaper}
+- Floor: ${roomStyle.floor}
+- Wall decorations: subtle art or frames consistent with the room style (optional)
+- Color harmony: ensure wallpaper and floor colors complement the bear and furniture`;
+}
 
-Room level: ${roomStage.stage}/5 (${totalMealCount} meals)
-${roomStage.furniture}
+/**
+ * Build prompt for bear appearance and features
+ */
+export function buildBearFeaturesPrompt(roomStyle: RoomStyle): string {
+  return `=== Bear ===
+- Young, cute, fluffy bear
+- Outfit: ${roomStyle.outfit}
+- Activity: ${roomStyle.activity}
+- Expression: ${roomStyle.expression}
+- Lighting: ${roomStyle.lighting}`;
+}
 
-${meals.length > 0 ? `
-Meal influence: ${mealInfluence}
-→ These affect STYLE of clothes, furniture, wallpaper (culture, colors, patterns)
-→ DOMINANT items can appear as motifs (e.g. tomato pattern on cushion)
-` : "No meals yet → neutral style, simple plain items"}
-
-${STYLE}
-
-⚠️ REMINDER: NO FOOD, NO TEXT - the bear is doing an activity, NOT eating.
-`.trim();
+/**
+ * Compose final bear image prompt from already-generated detail parts.
+ * Each part should be a multi-line instruction suitable for an image model.
+ */
+export function buildBearImagePromptFromParts(
+  bearFeaturesPart: string,
+  furniturePart: string,
+  wallpaperFloorPart: string,
+  roomStage: ReturnType<typeof calculateRoomStage>
+): string {
+  return [
+    "⚠️ CRITICAL: NO FOOD, NO TEXT in image. No dishes, plates, letters, or words anywhere.",
+    "Generate a clay miniature diorama of a young bear's room.",
+    bearFeaturesPart,
+    `=== Room (Level ${roomStage.stage}/5) ===`,
+    furniturePart,
+    wallpaperFloorPart,
+    COMPOSITION,
+    STYLE,
+    IMAGE_CONSTRAINTS,
+    "⚠️ REMINDER: NO FOOD, NO TEXT. FRONT VIEW with 3 walls visible. Bear doing activity.",
+  ].join("\n\n").trim();
 }

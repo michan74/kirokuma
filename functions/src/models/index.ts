@@ -32,6 +32,31 @@ export interface MealAnalysis {
 }
 
 /**
+ * 部屋のスタイル（Step1で生成）
+ * 食材情報から生成され、画像生成に使用される
+ */
+export interface RoomStyle {
+  /** 部屋のスタイル 例: "Mediterranean", "Japanese traditional" */
+  roomStyle: string;
+  /** 壁紙の色・パターン 例: "warm terracotta with subtle wave pattern" */
+  wallpaper: string;
+  /** 床の色・素材 例: "warm wooden planks", "tatami mats" */
+  floor: string;
+  /** ラグの有無・スタイル 例: "cozy knitted rug", "none", "round woven mat" */
+  rug: string;
+  /** 家具のスタイル 例: "rustic wooden with linen accents" */
+  furnitureStyle: string;
+  /** クマの服装 例: "linen apron over white shirt" */
+  outfit: string;
+  /** クマの活動・趣味 例: "painting on an easel" */
+  activity: string;
+  /** クマの表情 例: "focused and content" */
+  expression: string;
+  /** 時間帯・照明 例: "warm afternoon sunlight" */
+  lighting: string;
+}
+
+/**
  * Firestore: users コレクション
  */
 export interface User {
