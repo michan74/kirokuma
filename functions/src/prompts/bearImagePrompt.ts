@@ -147,6 +147,97 @@ export function buildBearFeaturesPrompt(roomStyle: RoomStyle): string {
 }
 
 /**
+ * 家具の詳細を生成するためのLLMプロンプト
+ * このプロンプトをLLMに投げて、具体的な家具の配置や種類を生成する
+ */
+export function buildFurnitureGenerationPrompt(
+  roomStyle: RoomStyle,
+  roomStage: ReturnType<typeof calculateRoomStage>
+): string {
+  return `You are a room designer for a clay miniature diorama.
+Generate detailed furniture arrangement for a young bear's room.
+
+Room Level: ${roomStage.stage}/5 (${roomStage.name})
+Furniture Amount Guideline: ${roomStage.furnitureAmount}
+Furniture Style: ${roomStyle.furnitureStyle}
+Rug: ${roomStyle.rug}
+
+Requirements:
+- List specific furniture items appropriate for the room level
+- Describe placement and arrangement naturally
+- Include small props (shelves, lamp, plants) as appropriate
+- Ensure items match the furniture style
+- Create a cozy, lived-in feeling
+
+Output format (plain text, suitable for image generation prompt):
+- Furniture amount: [specific count or description]
+- Furniture style: [description]
+- Rug: [description]
+- Items: [list specific items]
+- Small props: [list specific props]
+- Arrangement: [describe natural placement]`;
+}
+
+/**
+ * 壁紙/床の詳細を生成するためのLLMプロンプト
+ * このプロンプトをLLMに投げて、具体的な壁紙と床のデザインを生成する
+ */
+export function buildWallpaperFloorGenerationPrompt(
+  roomStyle: RoomStyle
+): string {
+  return `You are a room designer for a clay miniature diorama.
+Generate detailed wallpaper and floor design for a young bear's room.
+
+Wallpaper Theme: ${roomStyle.wallpaper}
+Floor Theme: ${roomStyle.floor}
+Overall Style: Clay/polymer texture, pastel colors, cozy atmosphere
+
+Requirements:
+- Describe specific patterns, colors, and textures for wallpaper
+- Describe specific materials, colors, and textures for floor
+- Suggest wall decorations that complement the style
+- Ensure color harmony between wallpaper, floor, and overall room theme
+- Keep descriptions suitable for clay miniature aesthetic
+
+Output format (plain text, suitable for image generation prompt):
+- Wallpaper: [detailed description with colors, patterns, texture]
+- Floor: [detailed description with materials, colors, texture]
+- Wall decorations: [specific items and placement]
+- Color harmony: [how colors work together]`;
+}
+
+/**
+ * クマの特徴の詳細を生成するためのLLMプロンプト
+ * このプロンプトをLLMに投げて、具体的なクマの見た目やポーズを生成する
+ */
+export function buildBearFeaturesGenerationPrompt(roomStyle: RoomStyle): string {
+  return `You are a character designer for a clay miniature diorama. Generate detailed bear character features and pose.
+
+Character Context:
+- Outfit Theme: ${roomStyle.outfit}
+- Activity: ${roomStyle.activity}
+- Expression: ${roomStyle.expression}
+- Lighting: ${roomStyle.lighting}
+
+Requirements:
+- Describe specific outfit details (colors, style, accessories)
+- Describe specific activity and pose in detail
+- Describe facial expression and body language
+- Describe how lighting affects the scene mood
+- Keep the bear young, cute, and fluffy
+- Ensure the activity is engaging and natural
+- ⚠️ NO FOOD in the scene - bear should be doing activity, not eating
+
+Output format (plain text, suitable for image generation prompt):
+=== Bear ===
+- Young, cute, fluffy bear
+- Outfit: [detailed outfit description]
+- Activity: [detailed activity and pose]
+- Expression: [detailed facial expression and mood]
+- Lighting: [detailed lighting description and mood]`;
+}
+
+/**
  * Compose final bear image prompt from already-generated detail parts.
  * Each part should be a multi-line instruction suitable for an image model.
  */

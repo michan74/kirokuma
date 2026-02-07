@@ -8,6 +8,9 @@ import {
   getDefaultRoomStyle,
   buildBearImagePromptFromParts,
   calculateRoomStage,
+  buildFurnitureGenerationPrompt,
+  buildWallpaperFloorGenerationPrompt,
+  buildBearFeaturesGenerationPrompt,
 } from "../prompts";
 
 const PROJECT_ID = process.env.GCP_PROJECT_ID || "";
@@ -58,7 +61,7 @@ async function generateRoomStyle(meals: MealAnalysis[]): Promise<RoomStyle> {
   logger.debug("Room style prompt built", {prompt});
 
   const response = await ai.models.generateContent({
-    model: "gemini-2.0-flash",
+    model: "gemini-2.5-pro",
     contents: [
       {
         role: "user",
@@ -101,7 +104,7 @@ async function generateImageFromStyle(
   // Generate detailed prompt parts via text AI
   async function generateDetailFromAI(instruction: string): Promise<string> {
     const resp = await ai.models.generateContent({
-      model: "gemini-2.0-flash",
+      model: "gemini-2.5-pro",
       contents: [
         {
           role: "user",
@@ -114,50 +117,15 @@ async function generateImageFromStyle(
     return txt.trim();
   }
 
-  const roomStyleJson = JSON.stringify(roomStyle, null, 2);
-
-  const furnitureInstruction = [
-    "You are an assistant that expands a compact furniture hint into a detailed",
-    "image-generation instruction suitable for a clay miniature diorama.",
-    "",
-    "RoomStyle JSON:",
-    roomStyleJson,
-    "",
-    `Room stage: ${roomStage.stage} (use this to decide number of items and clutter).`,
-    "",
-    "Produce concise bullet points describing specific furniture pieces, their materials,",
-    "approximate placement, and small decorative props.",
-    "Output only the instruction text, no commentary.",
-  ].join("\n");
-
-  const wallpaperInstruction = [
-    "Expand the wallpaper and floor hints into detailed image-generation directives.",
-    "",
-    "RoomStyle JSON:",
-    roomStyleJson,
-    "",
-    "Describe wallpaper pattern, colors, floor material, and any subtle wall",
-    "decorations or baseboards.",
-    "Keep it suitable for a pastel clay miniature aesthetic.",
-    "Output only the instruction text.",
-  ].join("\n");
-
-  const bearInstruction = [
-    "Expand the bear feature hints into a detailed image-generation directive for",
-    "a young fluffy bear in a clay miniature style.",
-    "",
-    "RoomStyle JSON:",
-    roomStyleJson,
-    "",
-    "Include outfit details, precise activity pose suggestions, facial expression",
-    "nuances, and how lighting should affect the bear.",
-    "Output only the instruction text.",
-  ].join("\n");
+  // Generate prompt parts using the new generation functions
+  const furnitureInstruction = buildFurnitureGenerationPrompt(roomStyle, roomStage);
+  const wallpaperFloorInstruction = buildWallpaperFloorGenerationPrompt(roomStyle);
+  const bearFeaturesInstruction = buildBearFeaturesGenerationPrompt(roomStyle);
 
   const [furniturePart, wallpaperFloorPart, bearFeaturesPart] = await Promise.all([
     generateDetailFromAI(furnitureInstruction),
-    generateDetailFromAI(wallpaperInstruction),
-    generateDetailFromAI(bearInstruction),
+    generateDetailFromAI(wallpaperFloorInstruction),
+    generateDetailFromAI(bearFeaturesInstruction),
   ]);
 
   const bearPrompts = {
@@ -169,6 +137,15 @@ async function generateImageFromStyle(
   logger.info("Generated bear prompt parts", {bearPrompts});
 
   const prompt = buildBearImagePromptFromParts(bearFeaturesPart, furniturePart, wallpaperFloorPart, roomStage);
+
+  console.log("=== くま生成プロンプト (1/3: Bear Features) ===");
+  console.log(bearFeaturesPart);
+  console.log("\n=== くま生成プロンプト (2/3: Furniture) ===");
+  console.log(furniturePart);
+  console.log("\n=== くま生成プロンプト (3/3: Wallpaper/Floor) ===");
+  console.log(wallpaperFloorPart);
+  console.log("\n=== 完全なプロンプト ===");
+  console.log(prompt);
 
   const response = await ai.models.generateContent({
     model: "gemini-2.5-flash-image",
