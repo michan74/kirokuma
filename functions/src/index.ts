@@ -74,11 +74,12 @@ async function handleEvent(event: WebhookEvent): Promise<void> {
 
     try {
       // 1. 「もぐもぐ」メッセージを即座に返信
-      await lineClient.replyMessage({
-        replyToken,
-        messages: [{type: "text", text: "もぐもぐ..."}],
-      });
-      logger.info("Sent mogumogu message");
+      // TODO: ハッカソン提出時に復活させる（無料メッセージ数制限のため一旦コメントアウト）
+      // await lineClient.replyMessage({
+      //   replyToken,
+      //   messages: [{type: "text", text: "もぐもぐ..."}],
+      // });
+      // logger.info("Sent mogumogu message");
 
       // 2. LINE から画像をダウンロード
       const imageStream = await lineBlobClient.getMessageContent(event.message.id);
@@ -159,8 +160,10 @@ async function handleEvent(event: WebhookEvent): Promise<void> {
           },
         ];
 
-      await lineClient.pushMessage({
-        to: userId,
+      // await lineClient.pushMessage({
+      //   to: userId,
+      await lineClient.replyMessage({
+        replyToken,
         messages,
       });
       logger.info("Sent bear image via pushMessage");
@@ -168,15 +171,15 @@ async function handleEvent(event: WebhookEvent): Promise<void> {
       const errorMessage = error instanceof Error ? error.message : String(error);
       const errorStack = error instanceof Error ? error.stack : "";
       logger.error("Error processing image", {message: errorMessage, stack: errorStack});
-      await lineClient.pushMessage({
-        to: userId,
-        messages: [
-          {
-            type: "text",
-            text: "ごめんね、エラーが起きちゃった🐻💦\nもう一度試してみてね！",
-          },
-        ],
-      });
+      // await lineClient.pushMessage({
+      //   to: userId,
+      //   messages: [
+      //     {
+      //       type: "text",
+      //       text: "ごめんね、エラーが起きちゃった🐻💦\nもう一度試してみてね！",
+      //     },
+      //   ],
+      // });
     }
     return;
   }
