@@ -8,9 +8,9 @@ import {
   getDefaultRoomStyle,
   buildBearImagePromptFromParts,
   calculateRoomStage,
-  buildFurnitureGenerationPrompt,
-  buildWallpaperFloorGenerationPrompt,
-  buildBearFeaturesGenerationPrompt,
+  buildFurnitureGenerationPromptFromMeals,
+  buildWallpaperFloorGenerationPromptFromMeals,
+  buildBearFeaturesGenerationPromptFromMeals,
 } from "../prompts";
 
 const PROJECT_ID = process.env.GCP_PROJECT_ID || "";
@@ -88,13 +88,14 @@ async function generateRoomStyle(meals: MealAnalysis[]): Promise<RoomStyle> {
 }
 
 /**
- * Step2: 部屋スタイルからくま画像を生成（参照画像あり）
- * @param roomStyle 部屋のスタイル
+ * Step2: 食事履歴から直接くま画像を生成（参照画像あり）
+ * RoomStyleを経由せずに、食事履歴から直接プロンプトを生成
+ * @param meals 食事履歴
  * @param totalMealCount 総食事回数
  * @param referenceImageBase64 参照画像（Base64）- 初期は空の部屋、以降は前のクマ画像
  */
-async function generateImageFromStyle(
-  roomStyle: RoomStyle,
+async function generateImageFromMeals(
+  meals: MealAnalysis[],
   totalMealCount: number,
   referenceImageBase64: string
 ): Promise<Buffer> {
@@ -117,10 +118,10 @@ async function generateImageFromStyle(
     return txt.trim();
   }
 
-  // Generate prompt parts using the new generation functions
-  const furnitureInstruction = buildFurnitureGenerationPrompt(roomStyle, roomStage);
-  const wallpaperFloorInstruction = buildWallpaperFloorGenerationPrompt(roomStyle);
-  const bearFeaturesInstruction = buildBearFeaturesGenerationPrompt(roomStyle);
+  // Generate prompt parts directly from meals
+  const furnitureInstruction = buildFurnitureGenerationPromptFromMeals(meals, roomStage);
+  const wallpaperFloorInstruction = buildWallpaperFloorGenerationPromptFromMeals(meals);
+  const bearFeaturesInstruction = buildBearFeaturesGenerationPromptFromMeals(meals);
 
   const [furniturePart, wallpaperFloorPart, bearFeaturesPart] = await Promise.all([
     generateDetailFromAI(furnitureInstruction),
@@ -172,9 +173,7 @@ async function generateImageFromStyle(
 }
 
 /**
- * 過去の食事履歴からくま画像を生成する（2段階処理）
- * Step1: 食事履歴 → 部屋スタイル（テキストAI）
- * Step2: 部屋スタイル + 参照画像 → 画像（画像AI）
+ * 過去の食事履歴からくま画像を生成する（直接生成方式）
  * @param meals 過去7日分の食事履歴
  * @param totalMealCount 総食事回数（成長段階の計算に使用）
  * @param previousBearImageBase64 前のクマ画像（Base64）- 初回はundefined
@@ -184,18 +183,14 @@ export async function generateBearImage(
   totalMealCount: number,
   previousBearImageBase64?: string
 ): Promise<Buffer> {
-  // Step1: 食事から部屋スタイルを生成（食材名はここで消える）
-  const roomStyle = await generateRoomStyle(meals);
-  logger.info("Generated room style", {roomStyle});
-
   // 参照画像を決定: 前のクマ画像があればそれを使う、なければ空の部屋画像
   const referenceImage = previousBearImageBase64 || loadEmptyRoomImage();
   logger.info("Using reference image", {
     type: previousBearImageBase64 ? "previousBear" : "emptyRoom",
   });
 
-  // Step2: 部屋スタイル + 参照画像から画像を生成
-  return generateImageFromStyle(roomStyle, totalMealCount, referenceImage);
+  // 食事履歴から直接画像を生成
+  return generateImageFromMeals(meals, totalMealCount, referenceImage);
 }
 
 /**

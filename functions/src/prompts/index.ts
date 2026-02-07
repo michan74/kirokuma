@@ -10,4 +10,7 @@ export {
   buildFurnitureGenerationPrompt,
   buildWallpaperFloorGenerationPrompt,
   buildBearFeaturesGenerationPrompt,
+  buildFurnitureGenerationPromptFromMeals,
+  buildWallpaperFloorGenerationPromptFromMeals,
+  buildBearFeaturesGenerationPromptFromMeals,
 } from "./bearImagePrompt";
