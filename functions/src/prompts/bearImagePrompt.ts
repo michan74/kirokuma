@@ -1,4 +1,4 @@
-import {RoomStyle} from "../models";
+import {RoomStyle, MealAnalysis} from "../models";
 
 /**
  * スタイル定義 - 粘土ミニチュア風の部屋
@@ -14,7 +14,9 @@ const COMPOSITION = `
 
 const STYLE = `
 Style:
-- Clay/polymer texture, pastel colors, soft cozy lighting
+- Miniature diorama inside a glass dome/snow globe
+- Realistic textures with soft, diffused lighting
+- Clean, minimalist aesthetic with detailed materials
 - NO TEXT, NO WATERMARK anywhere
 `.trim();
 
@@ -259,4 +261,117 @@ export function buildBearImagePromptFromParts(
     IMAGE_CONSTRAINTS,
     "⚠️ REMINDER: NO FOOD, NO TEXT. FRONT VIEW with 3 walls visible. Bear doing activity.",
   ].join("\n\n").trim();
+}
+
+/**
+ * 食事履歴から直接家具プロンプトを生成
+ * RoomStyleを経由せずに食事から家具の詳細を生成する
+ */
+export function buildFurnitureGenerationPromptFromMeals(
+  meals: MealAnalysis[],
+  roomStage: ReturnType<typeof calculateRoomStage>
+): string {
+  const mealHistory = meals.map((m) => {
+    const dishes = m.dishes.map((d) => d.name).join(", ");
+    return `- ${dishes}`;
+  }).join("\n");
+
+  return `3You are a room designer for a clay miniature diorama.
+Based on the meal history, design detailed furniture for a young bear's room.
+
+=== Meal History (past 7 days) ===
+${mealHistory || "No meals yet"}
+
+=== Room Level ===
+${roomStage.stage}/5 (${roomStage.name})
+Furniture Amount: ${roomStage.furnitureAmount}
+
+=== Translation Rules ===
+- Japanese food → Low wooden furniture, tatami patterns, warm wood tones
+- Italian/Western → Mediterranean style, rustic wood, terracotta colors
+- Healthy/Salad → Natural materials, light wood, plants as decor
+- Comfort food → Cozy furniture, soft cushions, warm textiles
+- Chinese food → Red/gold accents, elegant carved details
+
+⚠️ IMPORTANT: DO NOT mention food names in output. Translate meal culture to furniture style.
+
+Output format (plain text for image generation):
+- Furniture amount: [description]
+- Furniture style: [detailed style based on meals]
+- Items: [specific furniture pieces]
+- Small props: [decorative items]
+- Rug: [description]
+- Arrangement: [placement description]`;
+}
+
+/**
+ * 食事履歴から直接壁紙/床プロンプトを生成
+ */
+export function buildWallpaperFloorGenerationPromptFromMeals(meals: MealAnalysis[]): string {
+  const mealHistory = meals.map((m) => {
+    const dishes = m.dishes.map((d) => d.name).join(", ");
+    return `- ${dishes}`;
+  }).join("\n");
+
+  return `You are a room designer for a clay miniature diorama.
+Based on the meal history, design wallpaper and floor for a young bear's room.
+
+=== Meal History (past 7 days) ===
+${mealHistory || "No meals yet"}
+
+=== Translation Rules ===
+- Japanese food → Soft patterns, tatami or wooden floor, washi paper texture
+- Italian/Western → Textured plaster walls, terracotta tiles or warm wood floor
+- Healthy/Salad → Light colors, natural textures, botanical patterns
+- Comfort food → Warm colors, soft textures, cozy patterns
+- Chinese food → Elegant patterns, red/gold accents, decorative borders
+
+⚠️ IMPORTANT: DO NOT mention food names. Translate meal mood to wall/floor aesthetics.
+
+Output format (plain text for image generation):
+- Wallpaper: [detailed description with colors, patterns]
+- Floor: [detailed description with materials, colors]
+- Wall decorations: [subtle art or frames]
+- Color harmony: [overall color scheme]`;
+}
+
+/**
+ * 食事履歴から直接クマの特徴プロンプトを生成
+ */
+export function buildBearFeaturesGenerationPromptFromMeals(meals: MealAnalysis[]): string {
+  const mealHistory = meals.map((m) => {
+    const dishes = m.dishes.map((d) => d.name).join(", ");
+    return `- ${dishes}`;
+  }).join("\n");
+
+  return `You are a character designer for a clay miniature diorama.
+Based on the meal history, design a young bear character's appearance and activity.
+
+=== Meal History (past 7 days) ===
+${mealHistory || "No meals yet"}
+
+=== Translation Rules ===
+- Japanese food → Traditional or casual Japanese-inspired outfit, peaceful activities
+- Italian/Western → Casual European style, active/creative activities
+- Healthy/Salad → Sporty or natural outfit, energetic activities
+- Comfort food → Cozy outfit (sweater, pajamas), relaxing activities
+- Chinese food → Elegant outfit with subtle patterns, graceful activities
+
+=== Activity Ideas (NO EATING) ===
+- Reading, drawing, playing with toys
+- Stretching, dancing, playing music
+- Looking out window, watering plants
+- Building blocks, organizing shelves
+- Relaxing on floor, stargazing
+
+⚠️ CRITICAL: Bear should NOT be eating. Choose non-food activity.
+⚠️ DO NOT mention food names. Translate meal culture to outfit/activity style.
+
+Output format (plain text for image generation):
+=== Bear ===
+- Young, cute, fluffy bear
+- Outfit: [detailed outfit based on meal culture]
+- Activity: [specific non-food activity with pose details]
+- Expression: [facial expression and mood]
+- Lighting: [lighting that matches the mood]`;
 }

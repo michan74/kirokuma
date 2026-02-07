@@ -2,10 +2,8 @@ import {GoogleGenAI} from "@google/genai";
 import * as fs from "fs";
 import * as path from "path";
 import * as logger from "firebase-functions/logger";
-import {MealAnalysis, RoomStyle} from "../models";
+import {MealAnalysis} from "../models";
 import {
-  buildRoomStylePrompt,
-  getDefaultRoomStyle,
   buildBearImagePromptFromParts,
   calculateRoomStage,
   buildFurnitureGenerationPromptFromMeals,
@@ -24,9 +22,9 @@ const ai = new GoogleGenAI({
 
 /** 空の部屋画像探索パス */
 const EMPTY_ROOM_IMAGE_CANDIDATES = [
-  path.join(__dirname, "../assets/empty-room.png"),
-  path.join(__dirname, "../../src/assets/empty-room.png"),
-  path.join(process.cwd(), "src/assets/empty-room.png"),
+  path.join(__dirname, "../assets/empty-room-2.png"),
+  path.join(__dirname, "../../src/assets/empty-room-2.png"),
+  path.join(process.cwd(), "src/assets/empty-room-2.png"),
 ];
 
 function resolveEmptyRoomImagePath(): string {
@@ -46,45 +44,6 @@ function loadEmptyRoomImage(): string {
   const imagePath = resolveEmptyRoomImagePath();
   const imageBuffer = fs.readFileSync(imagePath);
   return imageBuffer.toString("base64");
-}
-
-/**
- * Step1: 食事履歴から部屋のスタイルを生成
- */
-async function generateRoomStyle(meals: MealAnalysis[]): Promise<RoomStyle> {
-  // 食事がない場合はデフォルトスタイル
-  if (meals.length === 0) {
-    return getDefaultRoomStyle();
-  }
-
-  const prompt = buildRoomStylePrompt(meals);
-  logger.debug("Room style prompt built", {prompt});
-
-  const response = await ai.models.generateContent({
-    model: "gemini-2.5-pro",
-    contents: [
-      {
-        role: "user",
-        parts: [{text: prompt}],
-      },
-    ],
-  });
-
-  const text = response.candidates?.[0]?.content?.parts?.[0]?.text || "";
-
-  // JSONを抽出してパース
-  const jsonMatch = text.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) {
-    console.warn("Failed to parse room style, using default");
-    return getDefaultRoomStyle();
-  }
-
-  try {
-    return JSON.parse(jsonMatch[0]) as RoomStyle;
-  } catch {
-    console.warn("Failed to parse room style JSON, using default");
-    return getDefaultRoomStyle();
-  }
 }
 
 /**
