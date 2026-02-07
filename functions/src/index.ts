@@ -73,7 +73,7 @@ async function handleEvent(event: WebhookEvent): Promise<void> {
     }
 
     try {
-      // 1. 「もぐもぐ」メッセージを即座に返信
+      // 1. 「もぐもぐ」メッセージを2秒後に返信
       // TODO: ハッカソン提出時に復活させる（無料メッセージ数制限のため一旦コメントアウト）
       // await lineClient.replyMessage({
       //   replyToken,
