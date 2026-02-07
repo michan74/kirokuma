@@ -12,6 +12,7 @@ import {
   saveMeal,
   getRecentMeals,
   getMealCount,
+  generateVideoFromBears,
 } from "./services";
 
 setGlobalOptions({maxInstances: 10});
@@ -34,23 +35,29 @@ export const hello = onRequest((request, response) => {
   response.send("Hello from Kirokuma!");
 });
 
-// LINE Webhook
-export const lineWebhook = onRequest(async (req, res) => {
-  // LINE からのリクエストを検証（本番では署名検証を追加）
-  const events: WebhookEvent[] = req.body.events;
+// LINE Webhook（メモリ・タイムアウト増量：動画生成処理のため）
+export const lineWebhook = onRequest(
+  {
+    memory: "2GiB",
+    timeoutSeconds: 540, // 9分
+  },
+  async (req, res) => {
+    // LINE からのリクエストを検証（本番では署名検証を追加）
+    const events: WebhookEvent[] = req.body.events;
 
-  if (!events || events.length === 0) {
+    if (!events || events.length === 0) {
+      res.json({status: "ok"});
+      return;
+    }
+
+    // 各イベントを処理
+    for (const event of events) {
+      await handleEvent(event);
+    }
+
     res.json({status: "ok"});
-    return;
   }
-
-  // 各イベントを処理
-  for (const event of events) {
-    await handleEvent(event);
-  }
-
-  res.json({status: "ok"});
-});
+);
 
 // イベント処理
 async function handleEvent(event: WebhookEvent): Promise<void> {
@@ -186,15 +193,154 @@ async function handleEvent(event: WebhookEvent): Promise<void> {
 
   // テキストメッセージの場合
   if (event.message.type === "text") {
+    const userId = event.source.userId;
+    if (!userId) {
+      logger.error("userId not found in event source");
+      return;
+    }
+
+    const messageText = event.message.text.trim();
+
+    // 「動画生成」リクエスト
+    if (messageText === "動画生成" || messageText === "動画") {
+      logger.info("Video generation requested via LINE", {userId});
+
+      try {
+        // すぐに返信（処理中メッセージ）
+        await lineClient.replyMessage({
+          replyToken,
+          messages: [
+            {
+              type: "text",
+              text: "動画を作っているよ！🐻\n少し時間がかかるから待っててね〜\n（30秒〜1分くらい）",
+            },
+          ],
+        });
+
+        // 動画生成処理（非同期）
+        const {default: admin} = await import("firebase-admin");
+        const db = admin.firestore();
+        const bearsSnapshot = await db
+          .collection("bears")
+          .where("userId", "==", userId)
+          .orderBy("createdAt", "desc")
+          .limit(14)
+          .get();
+
+        if (bearsSnapshot.empty || bearsSnapshot.size < 2) {
+          await lineClient.pushMessage({
+            to: userId,
+            messages: [
+              {
+                type: "text",
+                text: "ごめんね！動画を作るには、もう少し食事を記録する必要があるよ🐻\n（最低2回の食事記録が必要だよ）",
+              },
+            ],
+          });
+          return;
+        }
+
+        const bearImageUrls = bearsSnapshot.docs.map((doc) => doc.data().imageUrl);
+        logger.info("Bear images fetched for video", {count: bearImageUrls.length});
+
+        // 動画生成
+        const videoUrl = await generateVideoFromBears(bearImageUrls, userId);
+        logger.info("Video generated successfully via LINE", {videoUrl});
+
+        // 動画を送信
+        await lineClient.pushMessage({
+          to: userId,
+          messages: [
+            {
+              type: "text",
+              text: `できたよ！🎬\n${bearImageUrls.length}枚のくまの記録を動画にしたよ！`,
+            },
+            {
+              type: "video",
+              originalContentUrl: videoUrl,
+              previewImageUrl: bearImageUrls[0], // 最新のくま画像をサムネイルに
+            },
+          ],
+        });
+        logger.info("Video sent to user via LINE");
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        const errorStack = error instanceof Error ? error.stack : "";
+        logger.error("Error generating video via LINE", {message: errorMessage, stack: errorStack});
+
+        await lineClient.pushMessage({
+          to: userId,
+          messages: [
+            {
+              type: "text",
+              text: "ごめんね、動画生成でエラーが起きちゃった🐻💦\nもう一度試してみてね！",
+            },
+          ],
+        });
+      }
+      return;
+    }
+
+    // 通常のテキストメッセージ
     await lineClient.replyMessage({
       replyToken,
       messages: [
         {
           type: "text",
-          text: "こんにちは！🐻\n食事の写真を送ってね！",
+          text: "こんにちは！🐻\n食事の写真を送ってね！\n\n「動画生成」と送ると、くまの成長動画を作るよ！",
         },
       ],
     });
     return;
   }
 }
+
+// 動画生成エンドポイント（メモリ・タイムアウト増量）
+export const generateVideo = onRequest(
+  {
+    memory: "2GiB",
+    timeoutSeconds: 540, // 9分
+    minInstances: 0,
+  },
+  async (req, res) => {
+    try {
+      const {userId} = req.body;
+
+      if (!userId) {
+        res.status(400).json({error: "userId is required"});
+        return;
+      }
+
+      logger.info("Video generation requested", {userId});
+
+      // 過去のくま画像を取得（最大14枚）
+      const {default: admin} = await import("firebase-admin");
+      const db = admin.firestore();
+      const bearsSnapshot = await db
+        .collection("bears")
+        .where("userId", "==", userId)
+        .orderBy("createdAt", "desc")
+        .limit(14)
+        .get();
+
+      if (bearsSnapshot.empty || bearsSnapshot.size < 2) {
+        res.status(400).json({error: "At least 2 bear images are required"});
+        return;
+      }
+
+      const bearImageUrls = bearsSnapshot.docs.map((doc) => doc.data().imageUrl);
+      logger.info("Bear images fetched", {count: bearImageUrls.length});
+
+      // 動画生成
+      const videoUrl = await generateVideoFromBears(bearImageUrls, userId);
+      logger.info("Video generated successfully", {videoUrl});
+
+      res.json({videoUrl});
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorStack = error instanceof Error ? error.stack : "";
+      logger.error("Error generating video", {message: errorMessage, stack: errorStack});
+      res.status(500).json({error: "Failed to generate video"});
+    }
+  }
+);

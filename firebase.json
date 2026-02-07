@@ -3,6 +3,8 @@
     {
       "source": "functions",
       "codebase": "default",
+      "runtime": "nodejs24",
+      "dockerImage": "Dockerfile",
       "disallowLegacyRuntimeConfig": true,
       "ignore": [
         "node_modules",
