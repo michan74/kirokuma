@@ -1,8 +1,8 @@
 {
   "functions": [
     {
-      "source": "functions",
-      "codebase": "default",
+      "source": "functions/line-webhook",
+      "codebase": "line-webhook",
       "runtime": "nodejs24",
       "dockerImage": "Dockerfile",
       "disallowLegacyRuntimeConfig": true,
