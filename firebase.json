@@ -19,19 +19,6 @@
       ]
     },
     {
-      "source": "functions/python-video",
-      "codebase": "python-video",
-      "runtime": "python310",
-      "ignore": [
-        "__pycache__",
-        ".git",
-        "*.pyc",
-        "Dockerfile",
-        "Dockerfile.dev",
-        "README.md"
-      ]
-    },
-    {
       "source": "functions/python-video-generator",
       "codebase": "python-video-generator",
       "runtime": "python311",
