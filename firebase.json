@@ -17,6 +17,19 @@
         "npm --prefix \"$RESOURCE_DIR\" run lint",
         "npm --prefix \"$RESOURCE_DIR\" run build"
       ]
+    },
+    {
+      "source": "functions/python-video",
+      "codebase": "python-video",
+      "runtime": "python310",
+      "ignore": [
+        "__pycache__",
+        ".git",
+        "*.pyc",
+        "Dockerfile",
+        "Dockerfile.dev",
+        "README.md"
+      ]
     }
   ],
   "storage": {

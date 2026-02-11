@@ -1,0 +1,9 @@
+firebase-admin==6.*
+firebase-functions>=0.1.0
+functions-framework>=3.0.0
+moviepy==1.0.3
+Pillow==10.*
+requests==2.*
+numpy==1.*
+imageio==2.*
+imageio-ffmpeg==0.4.*
