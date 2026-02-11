@@ -25,8 +25,8 @@ def _init_firebase():
 def generate_video_python(request):
     """HTTP POST endpoint.
 
-    Expects JSON body: {"userId": "U..."}
-    Returns: {"imageUrls": [..]} (up to 7 most recent)
+    Expects JSON body: {"userId": "U...", "imageCount": 14}
+    Returns: {"videoUrl": "...", "imageCount": N, "duration": X.X}
     """
     headers = {'Access-Control-Allow-Origin': '*'}
 
@@ -48,9 +48,11 @@ def generate_video_python(request):
         if not user_id:
             return ({'error': 'userId is required'}, 400, headers)
 
-        logging.info(f'Fetching up to 7 bear images for user: {user_id}')
+        image_count = request_json.get('imageCount', 14)
 
-        # query Firestore for latest 7 images
+        logging.info(f'Video generation requested for user: {user_id}, imageCount: {image_count}')
+
+        # Firestoreから最新のくま画像を取得
         from firebase_admin import firestore
         db = firestore.client()
         bears_ref = db.collection('bears')
@@ -58,7 +60,7 @@ def generate_video_python(request):
             bears_ref
             .where(filter=firestore.FieldFilter('userId', '==', user_id))
             .order_by('createdAt', direction=firestore.Query.DESCENDING)
-            .limit(7)
+            .limit(image_count)
         )
 
         docs = query.get()
@@ -71,7 +73,20 @@ def generate_video_python(request):
 
         logging.info(f'Found {len(image_urls)} images for user {user_id}')
 
-        return ({'imageUrls': image_urls}, 200, headers)
+        if len(image_urls) < 2:
+            return ({'error': 'At least 2 bear images are required'}, 400, headers)
+
+        # 動画生成（遅延インポート）
+        from video_generator import generate_video_from_bears
+        video_url, duration = generate_video_from_bears(image_urls, user_id)
+
+        logging.info(f'Video generated successfully: {video_url}')
+
+        return ({
+            'videoUrl': video_url,
+            'imageCount': len(image_urls),
+            'duration': duration
+        }, 200, headers)
 
     except Exception as e:
         logging.error('Error in generate_video_python', exc_info=True)

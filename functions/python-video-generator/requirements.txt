@@ -2,4 +2,10 @@ firebase-admin==6.*
 functions-framework>=3.0.0
 firebase-functions>=0.1.0
 
-# Add your runtime deps below (moviepy/imageio-ffmpeg etc.) when ready
+# 動画生成用
+moviepy==1.0.3
+Pillow==9.*
+numpy==1.*
+imageio==2.*
+imageio-ffmpeg==0.4.*
+requests==2.*
