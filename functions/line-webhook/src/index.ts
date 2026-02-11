@@ -245,7 +245,9 @@ async function handleVideoGenerationEvent(event: MessageEvent): Promise<void> {
 
     // 2. Python動画生成関数を呼び出し
     const videoGeneratorUrl = process.env.VIDEO_GENERATOR_URL ||
-      "https://us-central1-kirokuma-c2d24.cloudfunctions.net/python-video-generator";
+      "https://generate-video-python-j7lkvu6b3a-uc.a.run.app";
+
+    logger.info("Calling video generator", {url: videoGeneratorUrl, userId});
 
     const response = await fetch(videoGeneratorUrl, {
       method: "POST",
@@ -253,10 +255,20 @@ async function handleVideoGenerationEvent(event: MessageEvent): Promise<void> {
       body: JSON.stringify({userId, imageCount: 14}),
     });
 
-    const result = await response.json() as {videoUrl?: string; thumbnailUrl?: string; error?: string};
+    logger.info("Video generator response", {status: response.status, ok: response.ok});
+
+    const resultText = await response.text();
+    logger.info("Video generator response body", {body: resultText.substring(0, 500)});
+
+    let result: {videoUrl?: string; thumbnailUrl?: string; error?: string};
+    try {
+      result = JSON.parse(resultText);
+    } catch {
+      throw new Error(`Invalid JSON response: ${resultText.substring(0, 200)}`);
+    }
 
     if (!response.ok || !result.videoUrl || !result.thumbnailUrl) {
-      throw new Error(result.error || "Video generation failed");
+      throw new Error(result.error || `Video generation failed (status: ${response.status})`);
     }
 
     logger.info("Video generated", {videoUrl: result.videoUrl, thumbnailUrl: result.thumbnailUrl});
@@ -279,18 +291,23 @@ async function handleVideoGenerationEvent(event: MessageEvent): Promise<void> {
     logger.info("Sent video via pushMessage");
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    logger.error("Error generating video", {message: errorMessage});
+    const errorStack = error instanceof Error ? error.stack : "";
+    logger.error("Error generating video", {message: errorMessage, stack: errorStack});
 
     // エラーメッセージをpushMessageで送信
-    await lineClient.pushMessage({
-      to: userId,
-      messages: [
-        {
-          type: "text",
-          text: "ごめんね、動画生成に失敗しちゃった🐻💦くまだー",
-        },
-      ],
-    });
+    try {
+      await lineClient.pushMessage({
+        to: userId,
+        messages: [
+          {
+            type: "text",
+            text: `ごめんね、動画生成に失敗しちゃった🐻💦\n${errorMessage}`,
+          },
+        ],
+      });
+    } catch (pushError) {
+      logger.error("Failed to send error message", {error: pushError});
+    }
   }
 }
 

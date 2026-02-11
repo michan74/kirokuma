@@ -59,7 +59,7 @@ def generate_video_python(request):
         query = (
             bears_ref
             .where(filter=firestore.FieldFilter('userId', '==', user_id))
-            .order_by('createdAt', direction=firestore.Query.ASCENDING)
+            .order_by('createdAt', direction=firestore.Query.DESCENDING)
             .limit(image_count)
         )
 

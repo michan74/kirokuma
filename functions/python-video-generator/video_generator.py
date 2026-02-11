@@ -46,6 +46,9 @@ def generate_video_from_bears(image_urls: list, user_id: str) -> tuple:
     thumbnail_path = os.path.join(temp_dir, 'thumbnail.jpg')
 
     try:
+        # 並び順を古い順に変更
+        image_urls = list(reversed(image_urls))
+
         # 1. 画像をダウンロードしてリサイズ
         logging.info(f'Downloading {len(image_urls)} images...')
         for i, url in enumerate(image_urls):
