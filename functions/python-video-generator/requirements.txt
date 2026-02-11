@@ -1,0 +1,5 @@
+firebase-admin==6.*
+functions-framework>=3.0.0
+firebase-functions>=0.1.0
+
+# Add your runtime deps below (moviepy/imageio-ffmpeg etc.) when ready

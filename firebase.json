@@ -30,6 +30,18 @@
         "Dockerfile.dev",
         "README.md"
       ]
+    },
+    {
+      "source": "functions/python-video-generator",
+      "codebase": "python-video-generator",
+      "runtime": "python311",
+      "ignore": [
+        "__pycache__",
+        ".git",
+        "*.pyc",
+        "Dockerfile",
+        "README.md"
+      ]
     }
   ],
   "storage": {
