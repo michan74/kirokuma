@@ -1,7 +1,7 @@
 import {setGlobalOptions} from "firebase-functions";
 import {onRequest} from "firebase-functions/https";
 import * as logger from "firebase-functions/logger";
-import {messagingApi, WebhookEvent} from "@line/bot-sdk";
+import {messagingApi, WebhookEvent, MessageEvent} from "@line/bot-sdk";
 import {
   analyzeMeal,
   generateBearImage,
@@ -52,7 +52,32 @@ export const lineWebhook = onRequest(
 
     // 各イベントを処理
     for (const event of events) {
-      await handleEvent(event);
+      // メッセージイベント以外は無視
+      if (event.type !== "message") {
+        continue;
+      }
+
+      // 型を明確にするため MessageEvent として扱う
+      const msgEvent = event as MessageEvent;
+
+      // 画像メッセージの場合
+      if (msgEvent.message.type === "image") {
+        await handleBearCreateEvent(msgEvent);
+        continue;
+      } else if (msgEvent.message.type === "text") {
+        // テキストメッセージの場合
+        const replyToken = msgEvent.replyToken;
+        await lineClient.replyMessage({
+          replyToken,
+          messages: [
+            {
+              type: "text",
+              text: "こんにちは！🐻\n食事の写真を送ってね！\n\n「動画生成」と送ると、くまの成長動画を作るよ！",
+            },
+          ],
+        });
+        continue;
+      }
     }
 
     res.json({status: "ok"});
@@ -60,239 +85,128 @@ export const lineWebhook = onRequest(
 );
 
 // イベント処理
-async function handleEvent(event: WebhookEvent): Promise<void> {
-  // メッセージイベント以外は無視
-  if (event.type !== "message") {
-    return;
-  }
-
+async function handleBearCreateEvent(event: MessageEvent): Promise<void> {
   const replyToken = event.replyToken;
 
-  // 画像メッセージの場合
-  if (event.message.type === "image") {
-    logger.info("Image received", {messageId: event.message.id});
+  logger.info("Image received", {messageId: event.message.id});
 
-    // ユーザーIDを取得（pushMessage用）
-    const userId = event.source.userId;
-    if (!userId) {
-      logger.error("userId not found in event source");
-      return;
-    }
-
-    try {
-      // 1. 「もぐもぐ」メッセージを2秒後に返信
-      // TODO: ハッカソン提出時に復活させる（無料メッセージ数制限のため一旦コメントアウト）
-      // await lineClient.replyMessage({
-      //   replyToken,
-      //   messages: [{type: "text", text: "もぐもぐ..."}],
-      // });
-      // logger.info("Sent mogumogu message");
-
-      // 2. LINE から画像をダウンロード
-      const imageStream = await lineBlobClient.getMessageContent(event.message.id);
-      const chunks: Buffer[] = [];
-      for await (const chunk of imageStream) {
-        chunks.push(Buffer.from(chunk));
-      }
-      const imageBuffer = Buffer.concat(chunks);
-      const imageBase64 = imageBuffer.toString("base64");
-      logger.info("Image downloaded", {size: imageBuffer.length});
-
-      // 3. 食事を分析
-      const mealAnalysis = await analyzeMeal(imageBase64);
-      logger.info("Meal analysis result", {mealAnalysis});
-
-      // 4. 過去7日分の食事履歴を取得
-      const recentMeals = await getRecentMeals(userId);
-      const pastMealAnalyses = recentMeals.map((meal) => meal.analyzedData);
-      logger.info("Past meals fetched", {count: pastMealAnalyses.length});
-
-      // 5. 総食事回数を取得（成長段階の計算用）
-      const currentMealCount = await getMealCount(userId);
-      const totalMealCount = currentMealCount + 1; // 今回の食事を含める
-      logger.info("Total meal count", {totalMealCount});
-
-      // 6. 前のクマ画像を取得（あれば）
-      let previousBearImageBase64: string | undefined;
-      const latestBear = await getLatestBear(userId);
-      if (latestBear) {
-        previousBearImageBase64 = await downloadImageAsBase64(latestBear.imageUrl);
-        logger.info("Previous bear image fetched", {bearId: latestBear.id});
-      }
-
-      // 7. 今日の食事を含めた全食事履歴でくま画像を生成
-      const allMeals = [...pastMealAnalyses, mealAnalysis];
-      const bearImageBuffer = await generateBearImage(allMeals, totalMealCount, previousBearImageBase64);
-      logger.info("Bear image generated");
-
-      // 8. くま画像をStorageにアップロード
-      const timestamp = Date.now();
-      const bearImageUrl = await uploadImage(
-        bearImageBuffer,
-        `bears/${timestamp}.png`
-      );
-      logger.info("Bear image uploaded", {url: bearImageUrl});
-
-      // 9. くまをDBに保存
-      const savedBear = await saveBear(bearImageUrl, userId);
-      logger.info("Bear saved", {bearId: savedBear.id});
-
-      // 10. 食事をDBに保存
-      const savedMeal = await saveMeal(imageBase64, mealAnalysis, savedBear.id, userId);
-      logger.info("Meal saved", {mealId: savedMeal.id});
-
-      // 11. くま画像を pushMessage で送信（初回と2回目以降でメッセージを変える）
-      const isFirstTime = pastMealAnalyses.length === 0;
-      const messages = isFirstTime ?
-        [
-          {
-            type: "text" as const,
-            text: "くまが生まれたよ！\nこれから一緒に食事を記録していこうね！",
-          },
-          {
-            type: "image" as const,
-            originalContentUrl: bearImageUrl,
-            previewImageUrl: bearImageUrl,
-          },
-        ] :
-        [
-          {
-            type: "text" as const,
-            text: "うまうま！",
-          },
-          {
-            type: "image" as const,
-            originalContentUrl: bearImageUrl,
-            previewImageUrl: bearImageUrl,
-          },
-        ];
-
-      // await lineClient.pushMessage({
-      //   to: userId,
-      await lineClient.replyMessage({
-        replyToken,
-        messages,
-      });
-      logger.info("Sent bear image via pushMessage");
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      const errorStack = error instanceof Error ? error.stack : "";
-      logger.error("Error processing image", {message: errorMessage, stack: errorStack});
-      // await lineClient.pushMessage({
-      //   to: userId,
-      //   messages: [
-      //     {
-      //       type: "text",
-      //       text: "ごめんね、エラーが起きちゃった🐻💦\nもう一度試してみてね！",
-      //     },
-      //   ],
-      // });
-    }
+  // ユーザーIDを取得（pushMessage用）
+  const userId = event.source.userId;
+  if (!userId) {
+    logger.error("userId not found in event source");
     return;
   }
 
-  // テキストメッセージの場合
-  if (event.message.type === "text") {
-    const userId = event.source.userId;
-    if (!userId) {
-      logger.error("userId not found in event source");
-      return;
+  try {
+    // 1. 「もぐもぐ」メッセージを2秒後に返信
+    // TODO: ハッカソン提出時に復活させる（無料メッセージ数制限のため一旦コメントアウト）
+    // await lineClient.replyMessage({
+    //   replyToken,
+    //   messages: [{type: "text", text: "もぐもぐ..."}],
+    // });
+    // logger.info("Sent mogumogu message");
+
+    // 2. LINE から画像をダウンロード
+    const imageStream = await lineBlobClient.getMessageContent(event.message.id);
+    const chunks: Buffer[] = [];
+    for await (const chunk of imageStream) {
+      chunks.push(Buffer.from(chunk));
+    }
+    const imageBuffer = Buffer.concat(chunks);
+    const imageBase64 = imageBuffer.toString("base64");
+    logger.info("Image downloaded", {size: imageBuffer.length});
+
+    // 3. 食事を分析
+    const mealAnalysis = await analyzeMeal(imageBase64);
+    logger.info("Meal analysis result", {mealAnalysis});
+
+    // 4. 過去7日分の食事履歴を取得
+    const recentMeals = await getRecentMeals(userId);
+    const pastMealAnalyses = recentMeals.map((meal) => meal.analyzedData);
+    logger.info("Past meals fetched", {count: pastMealAnalyses.length});
+
+    // 5. 総食事回数を取得（成長段階の計算用）
+    const currentMealCount = await getMealCount(userId);
+    const totalMealCount = currentMealCount + 1; // 今回の食事を含める
+    logger.info("Total meal count", {totalMealCount});
+
+    // 6. 前のクマ画像を取得（あれば）
+    let previousBearImageBase64: string | undefined;
+    const latestBear = await getLatestBear(userId);
+    if (latestBear) {
+      previousBearImageBase64 = await downloadImageAsBase64(latestBear.imageUrl);
+      logger.info("Previous bear image fetched", {bearId: latestBear.id});
     }
 
-    const messageText = event.message.text.trim();
+    // 7. 今日の食事を含めた全食事履歴でくま画像を生成
+    const allMeals = [...pastMealAnalyses, mealAnalysis];
+    const bearImageBuffer = await generateBearImage(allMeals, totalMealCount, previousBearImageBase64);
+    logger.info("Bear image generated");
 
-    // 「動画生成」リクエスト
-    if (messageText === "動画生成" || messageText === "動画") {
-      logger.info("Video generation requested via LINE", {userId});
+    // 8. くま画像をStorageにアップロード
+    const timestamp = Date.now();
+    const bearImageUrl = await uploadImage(
+      bearImageBuffer,
+      `bears/${timestamp}.png`
+    );
+    logger.info("Bear image uploaded", {url: bearImageUrl});
 
-      try {
-        // すぐに返信（処理中メッセージ）
-        await lineClient.replyMessage({
-          replyToken,
-          messages: [
-            {
-              type: "text",
-              text: "動画を作っているよ！🐻\n少し時間がかかるから待っててね〜\n（30秒〜1分くらい）",
-            },
-          ],
-        });
+    // 9. くまをDBに保存
+    const savedBear = await saveBear(bearImageUrl, userId);
+    logger.info("Bear saved", {bearId: savedBear.id});
 
-        // 動画生成処理（非同期）
-        const {default: admin} = await import("firebase-admin");
-        const db = admin.firestore();
-        const bearsSnapshot = await db
-          .collection("bears")
-          .where("userId", "==", userId)
-          .orderBy("createdAt", "desc")
-          .limit(14)
-          .get();
+    // 10. 食事をDBに保存
+    const savedMeal = await saveMeal(imageBase64, mealAnalysis, savedBear.id, userId);
+    logger.info("Meal saved", {mealId: savedMeal.id});
 
-        if (bearsSnapshot.empty || bearsSnapshot.size < 2) {
-          await lineClient.pushMessage({
-            to: userId,
-            messages: [
-              {
-                type: "text",
-                text: "ごめんね！動画を作るには、もう少し食事を記録する必要があるよ🐻\n（最低2回の食事記録が必要だよ）",
-              },
-            ],
-          });
-          return;
-        }
+    // 11. くま画像を pushMessage で送信（初回と2回目以降でメッセージを変える）
+    const isFirstTime = pastMealAnalyses.length === 0;
+    const messages = isFirstTime ?
+      [
+        {
+          type: "text" as const,
+          text: "くまが生まれたよ！\nこれから一緒に食事を記録していこうね！",
+        },
+        {
+          type: "image" as const,
+          originalContentUrl: bearImageUrl,
+          previewImageUrl: bearImageUrl,
+        },
+      ] :
+      [
+        {
+          type: "text" as const,
+          text: "うまうま！",
+        },
+        {
+          type: "image" as const,
+          originalContentUrl: bearImageUrl,
+          previewImageUrl: bearImageUrl,
+        },
+      ];
 
-        const bearImageUrls = bearsSnapshot.docs.map((doc) => doc.data().imageUrl);
-        logger.info("Bear images fetched for video", {count: bearImageUrls.length});
-
-        // 動画生成
-        const videoUrl = await generateVideoFromBears(bearImageUrls, userId);
-        logger.info("Video generated successfully via LINE", {videoUrl});
-
-        // 動画を送信
-        await lineClient.pushMessage({
-          to: userId,
-          messages: [
-            {
-              type: "text",
-              text: `できたよ！🎬\n${bearImageUrls.length}枚のくまの記録を動画にしたよ！`,
-            },
-            {
-              type: "video",
-              originalContentUrl: videoUrl,
-              previewImageUrl: bearImageUrls[0], // 最新のくま画像をサムネイルに
-            },
-          ],
-        });
-        logger.info("Video sent to user via LINE");
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        const errorStack = error instanceof Error ? error.stack : "";
-        logger.error("Error generating video via LINE", {message: errorMessage, stack: errorStack});
-
-        await lineClient.pushMessage({
-          to: userId,
-          messages: [
-            {
-              type: "text",
-              text: "ごめんね、動画生成でエラーが起きちゃった🐻💦\nもう一度試してみてね！",
-            },
-          ],
-        });
-      }
-      return;
-    }
-
-    // 通常のテキストメッセージ
+    // await lineClient.pushMessage({
+    //   to: userId,
     await lineClient.replyMessage({
       replyToken,
-      messages: [
-        {
-          type: "text",
-          text: "こんにちは！🐻\n食事の写真を送ってね！\n\n「動画生成」と送ると、くまの成長動画を作るよ！",
-        },
-      ],
+      messages,
     });
-    return;
+    logger.info("Sent bear image via pushMessage");
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorStack = error instanceof Error ? error.stack : "";
+    logger.error("Error processing image", {message: errorMessage, stack: errorStack});
+    // await lineClient.pushMessage({
+    //   to: userId,
+    //   messages: [
+    //     {
+    //       type: "text",
+    //       text: "ごめんね、エラーが起きちゃった🐻💦\nもう一度試してみてね！",
+    //     },
+    //   ],
+    // });
   }
+  return;
 }
 
 // 動画生成エンドポイント（メモリ・タイムアウト増量）
