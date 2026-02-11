@@ -125,6 +125,9 @@ async function generateImageFromMeals(
     ],
     config: {
       responseModalities: ["IMAGE"],
+      imageConfig: {
+        aspectRatio: "1:1",
+      },
     },
   });
 
