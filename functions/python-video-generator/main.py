@@ -59,7 +59,7 @@ def generate_video_python(request):
         query = (
             bears_ref
             .where(filter=firestore.FieldFilter('userId', '==', user_id))
-            .order_by('createdAt', direction=firestore.Query.DESCENDING)
+            .order_by('createdAt', direction=firestore.Query.ASCENDING)
             .limit(image_count)
         )
 
@@ -78,12 +78,13 @@ def generate_video_python(request):
 
         # 動画生成（遅延インポート）
         from video_generator import generate_video_from_bears
-        video_url, duration = generate_video_from_bears(image_urls, user_id)
+        video_url, thumbnail_url, duration = generate_video_from_bears(image_urls, user_id)
 
         logging.info(f'Video generated successfully: {video_url}')
 
         return ({
             'videoUrl': video_url,
+            'thumbnailUrl': thumbnail_url,
             'imageCount': len(image_urls),
             'duration': duration
         }, 200, headers)

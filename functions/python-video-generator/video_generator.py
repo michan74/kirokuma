@@ -35,17 +35,15 @@ def generate_video_from_bears(image_urls: list, user_id: str) -> tuple:
         user_id: ユーザーID
 
     Returns:
-        tuple: (video_url, duration)
+        tuple: (video_url, thumbnail_url, duration)
     """
     if len(image_urls) < 2:
         raise ValueError("At least 2 images are required")
 
-    # 古い順に並び替え（時系列で動画にするため）
-    image_urls = list(reversed(image_urls))
-
     temp_dir = tempfile.mkdtemp(prefix='video_')
     temp_images = []
     output_path = os.path.join(temp_dir, 'output.mp4')
+    thumbnail_path = os.path.join(temp_dir, 'thumbnail.jpg')
 
     try:
         # 1. 画像をダウンロードしてリサイズ
@@ -56,19 +54,23 @@ def generate_video_from_bears(image_urls: list, user_id: str) -> tuple:
             temp_images.append(img_path)
             logging.info(f'Downloaded image {i+1}/{len(image_urls)}')
 
-        # 2. 動画生成
+        # 2. サムネイル生成（最初の画像を使用）
+        logging.info('Creating thumbnail...')
+        _create_thumbnail(temp_images[0], thumbnail_path)
+
+        # 3. 動画生成
         logging.info('Generating video with zoom and crossfade effects...')
         _create_video_with_effects(temp_images, output_path)
 
-        # 3. Storageにアップロード
-        logging.info('Uploading video to Storage...')
-        video_url = _upload_video_to_storage(output_path, user_id)
+        # 4. Storageにアップロード
+        logging.info('Uploading video and thumbnail to Storage...')
+        video_url, thumbnail_url = _upload_video_and_thumbnail(output_path, thumbnail_path, user_id)
 
         # 動画の長さを計算
         duration = len(image_urls) * CLIP_DURATION - (len(image_urls) - 1) * CROSSFADE_DURATION
 
         logging.info(f'Video generated successfully: {video_url}')
-        return video_url, duration
+        return video_url, thumbnail_url, duration
 
     finally:
         # クリーンアップ
@@ -155,27 +157,41 @@ def _create_video_with_effects(image_paths: list, output_path: str) -> None:
         clip.close()
 
 
-def _upload_video_to_storage(video_path: str, user_id: str) -> str:
-    """動画をFirebase Storageにアップロード"""
+def _create_thumbnail(image_path: str, output_path: str) -> None:
+    """最初の画像からサムネイルを作成"""
+    with Image.open(image_path) as img:
+        img = img.convert('RGB')
+        img.save(output_path, 'JPEG', quality=85)
+
+
+def _upload_video_and_thumbnail(video_path: str, thumbnail_path: str, user_id: str) -> tuple:
+    """動画とサムネイルをFirebase Storageにアップロード"""
     bucket = storage.bucket()
+    bucket_name = bucket.name
 
     timestamp = int(os.path.getmtime(video_path) * 1000)
-    storage_path = f'videos/{user_id}/{timestamp}.mp4'
 
-    blob = bucket.blob(storage_path)
+    # 動画アップロード
+    video_storage_path = f'videos/{user_id}/{timestamp}.mp4'
+    video_blob = bucket.blob(video_storage_path)
+    video_token = str(uuid.uuid4())
+    video_blob.metadata = {'firebaseStorageDownloadTokens': video_token}
+    video_blob.upload_from_filename(video_path, content_type='video/mp4')
 
-    # ダウンロードトークンを生成
-    token = str(uuid.uuid4())
-    blob.metadata = {'firebaseStorageDownloadTokens': token}
+    video_encoded_path = video_storage_path.replace('/', '%2F')
+    video_url = f'https://firebasestorage.googleapis.com/v0/b/{bucket_name}/o/{video_encoded_path}?alt=media&token={video_token}'
 
-    blob.upload_from_filename(video_path, content_type='video/mp4')
+    # サムネイルアップロード
+    thumbnail_storage_path = f'videos/{user_id}/{timestamp}.jpg'
+    thumbnail_blob = bucket.blob(thumbnail_storage_path)
+    thumbnail_token = str(uuid.uuid4())
+    thumbnail_blob.metadata = {'firebaseStorageDownloadTokens': thumbnail_token}
+    thumbnail_blob.upload_from_filename(thumbnail_path, content_type='image/jpeg')
 
-    # 公開URLを生成
-    bucket_name = bucket.name
-    encoded_path = storage_path.replace('/', '%2F')
-    video_url = f'https://firebasestorage.googleapis.com/v0/b/{bucket_name}/o/{encoded_path}?alt=media&token={token}'
+    thumbnail_encoded_path = thumbnail_storage_path.replace('/', '%2F')
+    thumbnail_url = f'https://firebasestorage.googleapis.com/v0/b/{bucket_name}/o/{thumbnail_encoded_path}?alt=media&token={thumbnail_token}'
 
-    return video_url
+    return video_url, thumbnail_url
 
 
 def _cleanup_temp_files(temp_dir: str) -> None:

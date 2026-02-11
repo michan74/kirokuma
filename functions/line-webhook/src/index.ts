@@ -66,6 +66,15 @@ export const lineWebhook = onRequest(
         continue;
       } else if (msgEvent.message.type === "text") {
         // テキストメッセージの場合
+        const text = msgEvent.message.text;
+
+        // 「動画生成」を含む場合は動画生成処理
+        if (text.includes("動画生成")) {
+          await handleVideoGenerationEvent(msgEvent);
+          continue;
+        }
+
+        // その他のテキストは案内メッセージ
         const replyToken = msgEvent.replyToken;
         await lineClient.replyMessage({
           replyToken,
@@ -207,6 +216,82 @@ async function handleBearCreateEvent(event: MessageEvent): Promise<void> {
     // });
   }
   return;
+}
+
+// 動画生成イベント処理
+async function handleVideoGenerationEvent(event: MessageEvent): Promise<void> {
+  const replyToken = event.replyToken;
+  const userId = event.source.userId;
+
+  if (!userId) {
+    logger.error("userId not found in event source");
+    return;
+  }
+
+  logger.info("Video generation requested via LINE", {userId});
+
+  try {
+    // 1. 「作成中」メッセージを返信
+    await lineClient.replyMessage({
+      replyToken,
+      messages: [
+        {
+          type: "text",
+          text: "動画を作成中...🎬\nしばらくお待ちください！",
+        },
+      ],
+    });
+    logger.info("Sent creating message");
+
+    // 2. Python動画生成関数を呼び出し
+    const videoGeneratorUrl = process.env.VIDEO_GENERATOR_URL ||
+      "https://us-central1-kirokuma-c2d24.cloudfunctions.net/python-video-generator";
+
+    const response = await fetch(videoGeneratorUrl, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({userId, imageCount: 14}),
+    });
+
+    const result = await response.json() as {videoUrl?: string; thumbnailUrl?: string; error?: string};
+
+    if (!response.ok || !result.videoUrl || !result.thumbnailUrl) {
+      throw new Error(result.error || "Video generation failed");
+    }
+
+    logger.info("Video generated", {videoUrl: result.videoUrl, thumbnailUrl: result.thumbnailUrl});
+
+    // 3. 動画をpushMessageで送信
+    await lineClient.pushMessage({
+      to: userId,
+      messages: [
+        {
+          type: "text",
+          text: "くまの成長動画ができたよ！🐻🎬",
+        },
+        {
+          type: "video",
+          originalContentUrl: result.videoUrl,
+          previewImageUrl: result.thumbnailUrl,
+        },
+      ],
+    });
+    logger.info("Sent video via pushMessage");
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    logger.error("Error generating video", {message: errorMessage});
+
+    // エラーメッセージをpushMessageで送信
+    await lineClient.pushMessage({
+      to: userId,
+      messages: [
+        {
+          type: "text",
+          text: "ごめんね、動画生成に失敗しちゃった🐻💦くまだー",
+        },
+      ],
+    });
+  }
 }
 
 // 動画生成エンドポイント（メモリ・タイムアウト増量）
