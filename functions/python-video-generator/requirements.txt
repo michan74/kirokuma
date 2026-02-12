@@ -1,6 +1,7 @@
 firebase-admin==6.*
 functions-framework>=3.0.0
 firebase-functions>=0.1.0
+google-cloud-logging==3.*
 
 # 動画生成用
 moviepy==1.0.3

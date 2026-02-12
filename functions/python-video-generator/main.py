@@ -1,12 +1,27 @@
 """
 Minimal Python Cloud Function scaffold for `python-video-generator`.
 """
-import functions_framework
-import logging
 import os
 import json
+import logging
+from firebase_functions import https_fn, options
 
-logging.basicConfig(level=logging.INFO)
+_logging_initialized = False
+
+
+def _init_logging():
+    """Cloud Loggingを遅延初期化"""
+    global _logging_initialized
+    if _logging_initialized:
+        return
+    try:
+        import google.cloud.logging
+        client = google.cloud.logging.Client()
+        client.setup_logging()
+        _logging_initialized = True
+    except Exception:
+        logging.basicConfig(level=logging.INFO)
+        _logging_initialized = True
 
 
 def _init_firebase():
@@ -21,8 +36,12 @@ def _init_firebase():
         logging.exception('firebase_admin is not available in this environment')
 
 
-@functions_framework.http
-def generate_video_python(request):
+@https_fn.on_request(
+    memory=options.MemoryOption.GB_2,  # 2GB メモリ
+    timeout_sec=540,  # 9分タイムアウト
+    cpu=1,
+)
+def generate_video_python(request: https_fn.Request) -> https_fn.Response:
     """HTTP POST endpoint.
 
     Expects JSON body: {"userId": "U...", "imageCount": 14}
@@ -38,9 +57,13 @@ def generate_video_python(request):
         })
 
     try:
+        _init_logging()
+        logging.info('=== generate_video_python START ===')
         _init_firebase()
+        logging.info('Firebase initialized')
 
         request_json = request.get_json(silent=True)
+        logging.info(f'Request JSON: {request_json}')
         if not request_json:
             return ({'error': 'Invalid JSON'}, 400, headers)
 
@@ -48,8 +71,8 @@ def generate_video_python(request):
         if not user_id:
             return ({'error': 'userId is required'}, 400, headers)
 
-        image_count = request_json.get('imageCount', 14)
-
+        default_image_count = 7
+        image_count = request_json.get('imageCount', default_image_count)
         logging.info(f'Video generation requested for user: {user_id}, imageCount: {image_count}')
 
         # Firestoreから最新のくま画像を取得
@@ -77,10 +100,11 @@ def generate_video_python(request):
             return ({'error': 'At least 2 bear images are required'}, 400, headers)
 
         # 動画生成（遅延インポート）
+        logging.info('Importing video_generator...')
         from video_generator import generate_video_from_bears
+        logging.info('Calling generate_video_from_bears...')
         video_url, thumbnail_url, duration = generate_video_from_bears(image_urls, user_id)
-
-        logging.info(f'Video generated successfully: {video_url}')
+        logging.info(f'Video generated: {video_url}')
 
         return ({
             'videoUrl': video_url,
@@ -90,13 +114,5 @@ def generate_video_python(request):
         }, 200, headers)
 
     except Exception as e:
-        logging.error('Error in generate_video_python', exc_info=True)
+        logging.exception(f'ERROR: {str(e)}')
         return ({'error': str(e)}, 500, headers)
-
-# Register for static detection by firebase CLI if available
-try:
-    import importlib
-    https_fn = importlib.import_module('firebase_functions.https_fn')
-    generate_video_python = https_fn.on_request()(generate_video_python)
-except Exception:
-    logging.info('firebase_functions not available for static registration (continuing)')
