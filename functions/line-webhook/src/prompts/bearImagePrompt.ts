@@ -56,10 +56,10 @@ export function buildBearImagePromptFromChanges(
  */
 export function buildFurnitureChangePrompt(meals: MealAnalysis[]): string {
   const mealHistory = meals.map((m, i) => {
-    const dishes = m.dishes.map((d) => `${d.name}(${d.ingredients.join(", ")})`).join(", ");
-    const tags = m.tags.join(", ");
+    const ingredients = (m.ingredients ?? []).join(", ");
+    const tags = (m.tags ?? []).join(", ");
     const isToday = i === meals.length - 1;
-    return `${isToday ? "[TODAY] " : ""}${dishes} [${tags}]`;
+    return `${isToday ? "[TODAY] " : ""}${m.dish ?? "食事"} (${ingredients}) [${tags}]`;
   }).join("\n");
 
   return `You are a room designer for a cute miniature diorama.
@@ -102,10 +102,10 @@ Based on the CUMULATIVE meal history:
  */
 export function buildWallFloorChangePrompt(meals: MealAnalysis[]): string {
   const mealHistory = meals.map((m, i) => {
-    const dishes = m.dishes.map((d) => `${d.name}(${d.ingredients.join(", ")})`).join(", ");
-    const tags = m.tags.join(", ");
+    const ingredients = (m.ingredients ?? []).join(", ");
+    const tags = (m.tags ?? []).join(", ");
     const isToday = i === meals.length - 1;
-    return `${isToday ? "[TODAY] " : ""}${dishes} [${tags}]`;
+    return `${isToday ? "[TODAY] " : ""}${m.dish ?? "食事"} (${ingredients}) [${tags}]`;
   }).join("\n");
 
   return `You are a room designer for a cute miniature diorama.
@@ -142,14 +142,14 @@ Pick 1-2 changes inspired by the meal history:
  * 今回の食事からクマの服装/活動を決定
  */
 export function buildBearFeaturesPromptFromMeal(meal: MealAnalysis): string {
-  const dishes = meal.dishes.map((d) => `${d.name}(${d.ingredients.join(", ")})`).join(", ");
+  const ingredients = meal.ingredients.join(", ");
   const tags = meal.tags.join(", ");
 
   return `You are a character designer for a clay miniature diorama.
 Based on this meal, imagine: "After eating this, what would the bear want to do in their room today?"
 
 === Today's Meal ===
-${dishes}
+${meal.dish} (${ingredients})
 Tags: ${tags}
 
 === Think about ===

@@ -2,55 +2,44 @@
  * 食事画像分析用プロンプト
  */
 export const MEAL_ANALYSIS_PROMPT = `
-この写真を分析してください。
-必ずJSONのみを返してください。説明文は不要です。
+Analyze this photo.
+Return ONLY JSON. No explanation needed.
+All text output MUST be in Japanese.
 
-=== 食べ物でない場合 ===
-写真に食べ物が写っていない場合は、以下のJSONを返してください:
+=== If NOT food ===
+If the photo does not contain food:
 {"isFood": false}
 
-=== 食べ物の場合 ===
-食べ物が写っている場合は、以下のJSON形式で回答してください:
+=== If food ===
+If the photo contains food:
 
 {
   "isFood": true,
-  "dishes": [
-    {
-      "name": "料理名",
-      "category": "main",
-      "ingredients": ["食材1", "食材2"],
-      "portion": "medium"
-    }
-  ],
-  "tags": ["タグ1", "タグ2", "タグ3"]
+  "dish": "メイン料理名",
+  "ingredients": ["食材1", "食材2", "食材3"],
+  "tags": ["タグ1", "タグ2", "タグ3", "タグ4", "タグ5"]
 }
 
-=== カテゴリ (category) ===
-以下から1つ選択:
-- "main": 主菜（メインのおかず。例: 鮭の塩焼き、ハンバーグ、唐揚げ）
-- "side": 副菜（サブのおかず。例: サラダ、おひたし、漬物）
-- "staple": 主食（例: ご飯、パン、麺、パスタ）
-- "soup": 汁物（例: 味噌汁、スープ、お吸い物）
+=== dish ===
+The main dish name (1 only). Output in Japanese.
 
-=== 量 (portion) ===
-以下から1つ選択:
-- "small": 少なめ
-- "medium": 普通
-- "large": 多め
+=== ingredients ===
+List all ingredients in the photo (3-8 items).
+Include ingredients from side dishes and soup.
+Output in Japanese.
 
-=== タグ (tags) ===
-食事から受ける印象を自由にタグ付けしてください（3〜5個）。
-ジャンル、雰囲気、感情、季節感など何でもOK。具体的で多様なタグを付けてください。
+=== tags ===
+Tag the overall impression of the meal (5-8 tags).
+Include impressions from side dishes and soup.
+Output in Japanese.
 
-例:
-- "和食", "朝ごはん", "ほっこり", "手作り感", "野菜たっぷり", "赤い"
-- "イタリアン", "おしゃれ", "デート", "チーズ好き", "赤い"
-- "中華", "がっつり", "元気が出る", "スタミナ", "熱々"
-- "カフェ飯", "インスタ映え", "カラフル", "女子会", "甘い"
-
-=== 注意 ===
-- 写真に写っている料理をすべて個別に記録してください
-- 1つの料理に対して1つのオブジェクトを作成
-- ingredientsは各料理について、実際に使われている食材を1〜3個
-- tagsは毎回異なる多様な表現を使ってください
+Tag categories (mix freely):
+- Genre
+- Atmosphere
+- Scene
+- Emotion
+- Season
+- Color
+- Texture
+- Temperature
 `;

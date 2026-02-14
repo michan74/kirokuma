@@ -5,3 +5,10 @@ export {saveBear, getLatestBear} from "./bearRepository";
 export {saveMeal, getRecentMeals, getMealCount} from "./mealRepository";
 export {generateVideoFromBears} from "./videoGenerator";
 export {reincarnate, getActiveGroup} from "./bearGroupRepository";
+export {
+  getEmbedding,
+  getTagsEmbedding,
+  cosineSimilarity,
+  detectTrendStrength,
+  averageEmbedding,
+} from "./embeddingService";

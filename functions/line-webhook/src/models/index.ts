@@ -1,34 +1,12 @@
 /**
- * 料理カテゴリ
- */
-export type DishCategory = "main" | "side" | "staple" | "soup";
-
-/**
- * 量
- */
-export type Portion = "small" | "medium" | "large";
-
-/**
- * 1つの料理
- */
-export interface Dish {
-  /** 料理名 例: "鮭の塩焼き" */
-  name: string;
-  /** カテゴリ */
-  category: DishCategory;
-  /** 食材リスト */
-  ingredients: string[];
-  /** 量 */
-  portion: Portion;
-}
-
-/**
  * 食事分析結果
  * Gemini が食事画像から抽出する情報
  */
 export interface MealAnalysis {
-  /** 料理リスト（1回の食事に複数の料理） */
-  dishes: Dish[];
+  /** メイン料理名 例: "鮭の塩焼き定食" */
+  dish: string;
+  /** 食材リスト（副菜・スープの材料も含む） 例: ["鮭", "ごはん", "豆腐", "わかめ"] */
+  ingredients: string[];
   /** 食事から受ける印象のタグ（3〜5個） 例: ["和食", "ほっこり", "手作り感"] */
   tags: string[];
 }
@@ -111,8 +89,15 @@ export interface Bear {
 export interface Meal {
   id: string;
   userId: string;
+  groupId: string; // 所属するグループ
   bearId: string;
   imageUrl: string;
   analyzedData: MealAnalysis;
+  /** タグのEmbedding（雰囲気: ほっこり、おしゃれ等） */
+  tagsEmbedding?: number[];
+  /** 料理名のEmbedding（ジャンル: 味噌汁、パスタ等） */
+  dishesEmbedding?: number[];
+  /** 食材のEmbedding（モチーフ: きのこ、鮭等） */
+  ingredientsEmbedding?: number[];
   createdAt: Date;
 }

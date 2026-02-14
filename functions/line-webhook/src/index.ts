@@ -138,13 +138,31 @@ async function handleBearCreateEvent(event: MessageEvent): Promise<void> {
     const mealAnalysis = await analyzeMeal(imageBase64);
     logger.info("Meal analysis result", {mealAnalysis});
 
-    // 4. アクティブなグループを取得
-    const activeGroup = await getActiveGroup(userId);
-    const groupId = activeGroup?.id;
+    // 3.5. 中間メッセージを送信（分析完了を伝える）
+    const mainDish = mealAnalysis.dish;
+    await lineClient.replyMessage({
+      replyToken,
+      messages: [
+        {
+          type: "text",
+          text: `もぐもぐ...${mainDish}、おいしいな🐻\nどんなクマになるかな〜`,
+        },
+      ],
+    });
+    logger.info("Sent intermediate message");
+
+    // 4. アクティブなグループを取得（なければ作成）
+    let activeGroup = await getActiveGroup(userId);
+    if (!activeGroup) {
+      // 初回ユーザー: 転生で新しいグループを作成
+      activeGroup = await reincarnate(userId);
+      logger.info("Created first group for user", {groupId: activeGroup.id});
+    }
+    const groupId = activeGroup.id;
 
     // 5. 初回かどうかの判定用 & 過去7日分の食事履歴を取得
-    const currentMealCount = await getMealCount(userId);
-    const recentMeals = await getRecentMeals(userId);
+    const currentMealCount = await getMealCount(userId, groupId);
+    const recentMeals = await getRecentMeals(userId, groupId);
     const pastMealAnalyses = recentMeals.map((meal) => meal.analyzedData);
     logger.info("Current meal count", {currentMealCount, pastMealsCount: pastMealAnalyses.length});
 
@@ -174,7 +192,7 @@ async function handleBearCreateEvent(event: MessageEvent): Promise<void> {
     logger.info("Bear saved", {bearId: savedBear.id});
 
     // 10. 食事をDBに保存
-    const savedMeal = await saveMeal(imageBase64, mealAnalysis, savedBear.id, userId);
+    const savedMeal = await saveMeal(imageBase64, mealAnalysis, savedBear.id, groupId, userId);
     logger.info("Meal saved", {mealId: savedMeal.id});
 
     // 11. くま画像を pushMessage で送信（初回と2回目以降でメッセージを変える）
@@ -203,10 +221,8 @@ async function handleBearCreateEvent(event: MessageEvent): Promise<void> {
         },
       ];
 
-    // await lineClient.pushMessage({
-    //   to: userId,
-    await lineClient.replyMessage({
-      replyToken,
+    await lineClient.pushMessage({
+      to: userId,
       messages,
     });
     logger.info("Sent bear image via pushMessage");
