@@ -137,15 +137,19 @@ async function handleBearCreateEvent(event: MessageEvent): Promise<void> {
     const mealAnalysis = await analyzeMeal(imageBase64);
     logger.info("Meal analysis result", {mealAnalysis});
 
-    // 4. 初回かどうかの判定用 & 過去7日分の食事履歴を取得
+    // 4. アクティブなグループを取得
+    const activeGroup = await getActiveGroup(userId);
+    const groupId = activeGroup?.id;
+
+    // 5. 初回かどうかの判定用 & 過去7日分の食事履歴を取得
     const currentMealCount = await getMealCount(userId);
     const recentMeals = await getRecentMeals(userId);
     const pastMealAnalyses = recentMeals.map((meal) => meal.analyzedData);
     logger.info("Current meal count", {currentMealCount, pastMealsCount: pastMealAnalyses.length});
 
-    // 5. 前のクマ画像を取得（あれば）
+    // 6. 前のクマ画像を取得（現在のグループから）
     let previousBearImageBase64: string | undefined;
-    const latestBear = await getLatestBear(userId);
+    const latestBear = await getLatestBear(userId, groupId);
     if (latestBear) {
       previousBearImageBase64 = await downloadImageAsBase64(latestBear.imageUrl);
       logger.info("Previous bear image fetched", {bearId: latestBear.id});

@@ -16,7 +16,6 @@ const COMPOSITION = `
 const STYLE = `
 Style:
 - Miniature room box with wooden frame edges
-- Realistic textures with soft, diffused lighting
 - Clean, minimalist aesthetic with detailed materials
 - NO TEXT, NO WATERMARK anywhere
 `.trim();
@@ -66,9 +65,10 @@ export function buildBearImagePromptFromChanges(
  */
 export function buildFurnitureChangePrompt(meals: MealAnalysis[]): string {
   const mealHistory = meals.map((m, i) => {
-    const dishes = m.dishes.map((d) => d.name).join(", ");
+    const dishes = m.dishes.map((d) => `${d.name}(${d.ingredients.join(", ")})`).join(", ");
+    const tags = m.tags.join(", ");
     const isToday = i === meals.length - 1;
-    return `${isToday ? "[TODAY] " : ""}${dishes}`;
+    return `${isToday ? "[TODAY] " : ""}${dishes} [${tags}]`;
   }).join("\n");
 
   return `You are a room designer for a clay miniature diorama.
@@ -91,7 +91,7 @@ Based on the CUMULATIVE meal history:
 - Many meals (5-7): Can add medium furniture (table, shelf)
 - Lots of meals (7+): Can add large furniture (sofa, bed, bookshelf)
 
-Match the room's existing style based on the dominant cuisine in history.
+Match the room's existing style based on the dominant tags in history.
 
 === Output Rules ===
 - Add 1-2 items appropriate for the cumulative meal count
@@ -113,9 +113,10 @@ Example:
  */
 export function buildWallFloorChangePrompt(meals: MealAnalysis[]): string {
   const mealHistory = meals.map((m, i) => {
-    const dishes = m.dishes.map((d) => d.name).join(", ");
+    const dishes = m.dishes.map((d) => `${d.name}(${d.ingredients.join(", ")})`).join(", ");
+    const tags = m.tags.join(", ");
     const isToday = i === meals.length - 1;
-    return `${isToday ? "[TODAY] " : ""}${dishes}`;
+    return `${isToday ? "[TODAY] " : ""}${dishes} [${tags}]`;
   }).join("\n");
 
   return `You are a room designer for a clay miniature diorama.
@@ -140,10 +141,11 @@ Wall-mounted items (can add based on cumulative meals):
 - Chinese food → Elegant patterns, red/gold accents
 
 === IMPORTANT: Wallpaper/Floor Change Rules ===
-- ONLY change wallpaper/floor if the dominant cuisine has SHIFTED significantly
-- Example: If most meals were Japanese, keep Japanese-style walls/floor
-- Example: If meals shifted from Japanese to Italian, THEN change the style
-- If the style already matches the dominant cuisine: "No changes" for wallpaper/floor
+- Look at the dishes, ingredients, and tags to understand the meal style
+- ONLY change wallpaper/floor if the overall style has SHIFTED significantly
+- Example: If most meals are Japanese style, keep Japanese walls/floor
+- Example: If meals shifted to Italian style, THEN change
+- If the style already matches: "No changes" for wallpaper/floor
 
 === Wall-mounted Items ===
 - Can add 0-1 wall items based on cumulative meal count and style
@@ -166,13 +168,15 @@ Example (when style shifted):
  * 今回の食事からクマの服装/活動を決定
  */
 export function buildBearFeaturesPromptFromMeal(meal: MealAnalysis): string {
-  const dishes = meal.dishes.map((d) => d.name).join(", ");
+  const dishes = meal.dishes.map((d) => `${d.name}(${d.ingredients.join(", ")})`).join(", ");
+  const tags = meal.tags.join(", ");
 
   return `You are a character designer for a clay miniature diorama.
 Based on this meal, design a young bear character's appearance and activity.
 
 === Today's Meal ===
 ${dishes}
+Tags: ${tags}
 
 === Translation Rules ===
 - Japanese food → Traditional or casual Japanese-inspired outfit, peaceful activities
@@ -192,7 +196,7 @@ ${dishes}
 ⚠️ DO NOT mention food names.
 
 === Output Format ===
-- Outfit: [detailed outfit based on meal culture]
+- Outfit: [detailed outfit]
 - Activity: [specific non-food activity with pose details]
 - Expression: [facial expression and mood]
 - Lighting: [lighting that matches the mood]`;

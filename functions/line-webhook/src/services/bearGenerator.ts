@@ -19,6 +19,9 @@ const ai = new GoogleGenAI({
   location: LOCATION,
 });
 
+/** クマ特徴生成のtemperature（0.0-2.0、高いほど創造的） */
+const BEAR_FEATURES_TEMPERATURE = 1.2;
+
 /** 空の部屋画像パス */
 const EMPTY_ROOM_IMAGE_PATH = path.join(__dirname, "../assets/empty-room-3.png");
 
@@ -40,7 +43,7 @@ async function generateImageFromMeals(
   referenceImageBase64: string
 ): Promise<Buffer> {
   // Generate detailed prompt parts via text AI
-  async function generateDetailFromAI(instruction: string): Promise<string> {
+  async function generateDetailFromAI(instruction: string, temperature?: number): Promise<string> {
     const resp = await ai.models.generateContent({
       model: "gemini-2.5-pro",
       contents: [
@@ -49,6 +52,7 @@ async function generateImageFromMeals(
           parts: [{text: instruction}],
         },
       ],
+      config: temperature ? {temperature} : undefined,
     });
 
     const txt = resp.candidates?.[0]?.content?.parts?.[0]?.text || "";
@@ -68,7 +72,7 @@ async function generateImageFromMeals(
   const [furnitureChangePart, wallFloorChangePart, bearFeaturesPart] = await Promise.all([
     generateDetailFromAI(furnitureInstruction),
     generateDetailFromAI(wallFloorInstruction),
-    generateDetailFromAI(bearFeaturesInstruction),
+    generateDetailFromAI(bearFeaturesInstruction, BEAR_FEATURES_TEMPERATURE),
   ]);
 
   const bearPrompts = {

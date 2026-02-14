@@ -29,10 +29,8 @@ export interface Dish {
 export interface MealAnalysis {
   /** 料理リスト（1回の食事に複数の料理） */
   dishes: Dish[];
-  /** 料理のジャンル 例: "和食", "イタリアン", "和洋折衷" */
-  cuisine: string;
-  /** 食事の雰囲気 例: "ヘルシー", "ボリューム満点", "おしゃれカフェ風" */
-  atmosphere: string;
+  /** 食事から受ける印象のタグ（3〜5個） 例: ["和食", "ほっこり", "手作り感"] */
+  tags: string[];
 }
 
 /**
