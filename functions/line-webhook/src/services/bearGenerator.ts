@@ -145,11 +145,22 @@ export async function generateBearImage(
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function extractImageFromResponse(response: any): Buffer {
-  const parts = response.candidates?.[0]?.content?.parts;
+  const candidate = response.candidates?.[0];
+  const parts = candidate?.content?.parts;
   const imagePart = parts?.find((part: {inlineData?: {data?: string}}) => part.inlineData?.data);
   const imageData = imagePart?.inlineData?.data;
 
   if (!imageData) {
+    // デバッグ用: レスポンス内容をログ出力
+    logger.error("Image generation failed - response details", {
+      finishReason: candidate?.finishReason,
+      safetyRatings: candidate?.safetyRatings,
+      partsCount: parts?.length,
+      partsTypes: parts?.map((p: {text?: string; inlineData?: unknown}) =>
+        p.text ? "text" : p.inlineData ? "inlineData" : "unknown"
+      ),
+      textContent: parts?.find((p: {text?: string}) => p.text)?.text,
+    });
     throw new Error("Failed to generate bear image");
   }
 
