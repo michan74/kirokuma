@@ -1,13 +1,16 @@
 /**
  * LINE リッチメニュー設定スクリプト
  *
- * 使い方:
- * 1. リッチメニュー画像を準備 (2500x843px または 2500x1686px)
- * 2. npx ts-node scripts/setup-rich-menu.ts
+ * 実行コマンド:
+ * export $(cat functions/.env | xargs) && npx ts-node --esm scripts/setup-rich-menu.ts setup
  */
 
 import * as fs from "fs";
 import * as path from "path";
+import {fileURLToPath} from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // 環境変数からLINEアクセストークンを取得
 const LINE_CHANNEL_ACCESS_TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN;
@@ -207,8 +210,8 @@ async function main() {
         break;
 
       case "setup":
-        // 画像パスを指定（デフォルトはscripts/rich-menu.png）
-        const imagePath = args[1] || path.join(__dirname, "rich-menu.png");
+        // 画像パスを指定（デフォルトはscripts/images/menu_2.jpg）
+        const imagePath = args[1] || path.join(__dirname, "images/menu_2.jpg");
 
         if (!fs.existsSync(imagePath)) {
           console.error(`Image not found: ${imagePath}`);
