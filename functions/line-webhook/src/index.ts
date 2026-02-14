@@ -277,7 +277,7 @@ async function handleVideoGenerationEvent(event: MessageEvent): Promise<void> {
     const response = await fetch(videoGeneratorUrl, {
       method: "POST",
       headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({userId, imageCount: 14}),
+      body: JSON.stringify({userId, imageCount: 10}),
     });
 
     logger.info("Video generator response", {status: response.status, ok: response.ok});
@@ -408,7 +408,7 @@ async function handleVideoGenerationFromPostback(
     const response = await fetch(videoGeneratorUrl, {
       method: "POST",
       headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({userId, groupId: activeGroup.id, imageCount: 14}),
+      body: JSON.stringify({userId, groupId: activeGroup.id, imageCount: 10}),
     });
 
     logger.info("Video generator response", {
@@ -520,14 +520,14 @@ export const generateVideo = onRequest(
 
       logger.info("Video generation requested", {userId});
 
-      // 過去のくま画像を取得（最大14枚）
+      // 過去のくま画像を取得（最大10枚）
       const {default: admin} = await import("firebase-admin");
       const db = admin.firestore();
       const bearsSnapshot = await db
         .collection("bears")
         .where("userId", "==", userId)
         .orderBy("createdAt", "desc")
-        .limit(14)
+        .limit(10)
         .get();
 
       if (bearsSnapshot.empty || bearsSnapshot.size < 2) {
