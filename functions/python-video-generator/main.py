@@ -44,7 +44,7 @@ def _init_firebase():
 def generate_video_python(request: https_fn.Request) -> https_fn.Response:
     """HTTP POST endpoint.
 
-    Expects JSON body: {"userId": "U...", "imageCount": 14}
+    Expects JSON body: {"userId": "U...", "groupId": "...", "imageCount": 14}
     Returns: {"videoUrl": "...", "imageCount": N, "duration": X.X}
     """
     headers = {'Access-Control-Allow-Origin': '*'}
@@ -71,17 +71,22 @@ def generate_video_python(request: https_fn.Request) -> https_fn.Response:
         if not user_id:
             return ({'error': 'userId is required'}, 400, headers)
 
+        group_id = request_json.get('groupId')
+        if not group_id:
+            return ({'error': 'groupId is required'}, 400, headers)
+
         default_image_count = 7
         image_count = request_json.get('imageCount', default_image_count)
-        logging.info(f'Video generation requested for user: {user_id}, imageCount: {image_count}')
+        logging.info(f'Video generation requested for user: {user_id}, groupId: {group_id}, imageCount: {image_count}')
 
-        # Firestoreから最新のくま画像を取得
+        # Firestoreから指定グループのくま画像を取得
         from firebase_admin import firestore
         db = firestore.client()
         bears_ref = db.collection('bears')
         query = (
             bears_ref
             .where(filter=firestore.FieldFilter('userId', '==', user_id))
+            .where(filter=firestore.FieldFilter('groupId', '==', group_id))
             .order_by('createdAt', direction=firestore.Query.DESCENDING)
             .limit(image_count)
         )
@@ -94,7 +99,7 @@ def generate_video_python(request: https_fn.Request) -> https_fn.Response:
             if url:
                 image_urls.append(url)
 
-        logging.info(f'Found {len(image_urls)} images for user {user_id}')
+        logging.info(f'Found {len(image_urls)} images for user {user_id}, groupId: {group_id}')
 
         if len(image_urls) < 2:
             return ({'error': 'At least 2 bear images are required'}, 400, headers)

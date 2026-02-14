@@ -13,6 +13,8 @@ import {
   getRecentMeals,
   getMealCount,
   generateVideoFromBears,
+  reincarnate,
+  getActiveGroup,
 } from "./services";
 
 setGlobalOptions({maxInstances: 10});
@@ -358,17 +360,36 @@ async function handleVideoGenerationFromPostback(
   logger.info("Video generation requested via postback", {userId});
 
   try {
+    // アクティブなグループを取得
+    const activeGroup = await getActiveGroup(userId);
+    if (!activeGroup) {
+      await lineClient.replyMessage({
+        replyToken,
+        messages: [
+          {
+            type: "text",
+            text: "まだ食事の記録がないよ🐻\nまずは食事の写真を送ってね！",
+          },
+        ],
+      });
+      return;
+    }
+
     // Python動画生成関数を呼び出し
     const videoGeneratorUrl =
       process.env.VIDEO_GENERATOR_URL ||
       "https://generate-video-python-j7lkvu6b3a-uc.a.run.app";
 
-    logger.info("Calling video generator", {url: videoGeneratorUrl, userId});
+    logger.info("Calling video generator", {
+      url: videoGeneratorUrl,
+      userId,
+      groupId: activeGroup.id,
+    });
 
     const response = await fetch(videoGeneratorUrl, {
       method: "POST",
       headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({userId, imageCount: 14}),
+      body: JSON.stringify({userId, groupId: activeGroup.id, imageCount: 14}),
     });
 
     logger.info("Video generator response", {
@@ -447,14 +468,16 @@ async function handleResetFromPostback(
 ): Promise<void> {
   logger.info("Reset requested via postback", {userId});
 
-  // TODO: 実際のリセット処理を実装
+  // 転生処理: 現在のグループを終了し、新しいグループを作成
+  const newGroup = await reincarnate(userId);
+  logger.info("Reincarnation complete", {userId, newGroupId: newGroup.id});
 
   await lineClient.replyMessage({
     replyToken,
     messages: [
       {
         type: "text",
-        text: "🐻✨ 輪廻転生の準備中...\n\nこの機能はまだ開発中だよ！\nもう少し待っててね！",
+        text: "🐻✨ 輪廻転生しました！\n\n新しい人生の始まりだよ！\nまた食事の写真を送ってね！",
       },
     ],
   });

@@ -70,11 +70,23 @@ export interface User {
 }
 
 /**
+ * Firestore: bear_groups コレクション
+ * 転生ごとに新しいグループが作成される
+ */
+export interface BearGroup {
+  id: string;
+  userId: string;
+  createdAt: Date;
+  endedAt?: Date; // 転生時に設定
+}
+
+/**
  * Firestore: bears コレクション
  */
 export interface Bear {
   id: string;
   userId: string;
+  groupId: string; // 所属するグループ
   imageUrl: string;
   createdAt: Date;
 }
