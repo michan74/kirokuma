@@ -240,15 +240,15 @@ async function handleVideoGenerationEvent(event: MessageEvent): Promise<void> {
 
   try {
     // 1. 「作成中」メッセージを返信
-    await lineClient.replyMessage({
-      replyToken,
-      messages: [
-        {
-          type: "text",
-          text: "動画を作成中...🎬\nしばらくお待ちください！",
-        },
-      ],
-    });
+    // await lineClient.replyMessage({
+    //   replyToken,
+    //   messages: [
+    //     {
+    //       type: "text",
+    //       text: "動画を作成中...🎬\nしばらくお待ちください！",
+    //     },
+    //   ],
+    // });
     logger.info("Sent creating message");
 
     // 2. Python動画生成関数を呼び出し
@@ -282,8 +282,10 @@ async function handleVideoGenerationEvent(event: MessageEvent): Promise<void> {
     logger.info("Video generated", {videoUrl: result.videoUrl, thumbnailUrl: result.thumbnailUrl});
 
     // 3. 動画をpushMessageで送信
-    await lineClient.pushMessage({
-      to: userId,
+    // await lineClient.pushMessage({
+      // to: userId,
+    await lineClient.replyMessage({
+      replyToken,
       messages: [
         {
           type: "text",
