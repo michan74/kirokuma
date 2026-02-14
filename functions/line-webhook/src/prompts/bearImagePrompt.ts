@@ -18,24 +18,15 @@ Style:
 - Miniature room box with wooden frame edges
 - Clean, minimalist aesthetic with detailed materials
 - NO TEXT, NO WATERMARK anywhere
-`.trim();
 
-// const IMAGE_CONSTRAINTS = `
-// Image constraints (MUST FOLLOW):
-// - Do NOT change the canvas dimensions or add borders/margins/padding to the canvas.
-// - Preserve the reference image size exactly. Output should use the same canvas size.
-// - Allow the bear to be positioned freely in the room. Examples:
-//   - left, right, near the window
-//   - lying on the floor, on the bed
-//   - jumping, bathing, playing
-// - The bear must remain fully visible within the canvas (no cropping of the subject).
-// - Keep the subject reasonably large so it is the focal point.
-//   - Exact centering is NOT required.
-// - If the bear is positioned off-center, adjust background elements subtly (scale/shift).
-// - Do NOT add transparent padding, borders, or extend the canvas.
-// - Treat the provided reference image as a strict layout template for camera angle and perspective.
-//   Only modify contents inside the scene (objects, bear pose, scale); do not change camera geometry.
-// `.trim();
+Bear Style (MUST FOLLOW):
+- Cute stuffed animal / plush toy style young bear
+- Round, chubby body with short limbs
+- Soft fluffy brown fur with warm tones
+- Small solid black eyes (no whites)
+- Small cute nose
+- Friendly, huggable appearance
+`.trim();
 
 /**
  * 差分ベースの最終プロンプトを組み立て
@@ -47,15 +38,15 @@ export function buildBearImagePromptFromChanges(
 ): string {
   return [
     "⚠️ CRITICAL: NO FOOD, NO TEXT in image. No dishes, plates, letters, or words anywhere.",
-    "=== Bear ===",
+    "=== Bear (DRAW NEW, ignore previous bear) ===",
     bearFeaturesPart,
-    "=== Room Changes ===",
-    "Apply the following changes to the room. Keep everything else as-is.",
+    "=== Room Changes (apply to existing room) ===",
+    "Apply the following changes to the room. Keep existing furniture and decorations.",
     furnitureChangePart,
     wallFloorChangePart,
     COMPOSITION,
     STYLE,
-    "⚠️ REMINDER: NO FOOD, NO TEXT. Keep the frame and base unchanged.",
+    "⚠️ REMINDER: NO FOOD, NO TEXT. Draw bear fresh with new outfit. Keep room frame unchanged.",
   ].join("\n\n").trim();
 }
 
@@ -172,32 +163,22 @@ export function buildBearFeaturesPromptFromMeal(meal: MealAnalysis): string {
   const tags = meal.tags.join(", ");
 
   return `You are a character designer for a clay miniature diorama.
-Based on this meal, design a young bear character's appearance and activity.
+Based on this meal, imagine: "After eating this, what would the bear want to do in their room today?"
 
 === Today's Meal ===
 ${dishes}
 Tags: ${tags}
 
-=== Translation Rules ===
-- Japanese food → Traditional or casual Japanese-inspired outfit, peaceful activities
-- Italian/Western → Casual European style, active/creative activities
-- Healthy/Salad → Sporty or natural outfit, energetic activities
-- Comfort food → Cozy outfit (sweater, pajamas), relaxing activities
-- Chinese food → Elegant outfit with subtle patterns, graceful activities
+=== Think about ===
+- What mood does this meal give? (energetic, relaxed, cozy, playful, creative...)
+- What activity fits that mood? (anything the bear can do in a small room)
 
-=== Activity Ideas (NO EATING) ===
-- Reading, drawing, playing with toys
-- Stretching, dancing, playing music
-- Looking out window, watering plants
-- Building blocks, organizing shelves
-- Relaxing on floor, stargazing
-
-⚠️ CRITICAL: Bear should NOT be eating. Choose non-food activity.
-⚠️ DO NOT mention food names.
+⚠️ CRITICAL: Bear should NOT be eating or cooking. Choose ONE simple activity.
+⚠️ DO NOT mention food names in output.
 
 === Output Format ===
-- Outfit: [detailed outfit]
-- Activity: [specific non-food activity with pose details]
-- Expression: [facial expression and mood]
+- Outfit: [casual outfit that matches today's mood]
+- Activity: [ONE simple activity - what does the bear want to do today?]
+- Expression: [facial expression]
 - Lighting: [lighting that matches the mood]`;
 }
