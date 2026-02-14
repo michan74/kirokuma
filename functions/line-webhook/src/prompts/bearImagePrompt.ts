@@ -15,7 +15,7 @@ const COMPOSITION = `
  */
 const STYLE = `
 Style:
-- Miniature diorama inside a glass dome/snow globe
+- Miniature room box with wooden frame edges
 - Realistic textures with soft, diffused lighting
 - Clean, minimalist aesthetic with detailed materials
 - NO TEXT, NO WATERMARK anywhere
@@ -38,174 +38,141 @@ Style:
 //   Only modify contents inside the scene (objects, bear pose, scale); do not change camera geometry.
 // `.trim();
 
-/** 部屋の充実度段階の定義 */
-type RoomStage = 1 | 2 | 3 | 4 | 5;
-
-interface RoomStageInfo {
-  stage: RoomStage;
-  name: string;
-  furnitureAmount: string;
-}
-
-const ROOM_STAGES: Record<RoomStage, Omit<RoomStageInfo, "stage">> = {
-  1: {
-    name: "はじまりの部屋",
-    furnitureAmount: "Nearly empty - only 1-2 small items",
-  },
-  2: {
-    name: "少し落ち着いた",
-    furnitureAmount: "3-4 items (basic furniture and small decorations)",
-  },
-  3: {
-    name: "生活感が出てきた",
-    furnitureAmount: "5-6 items (furniture, decorations, and lighting)",
-  },
-  4: {
-    name: "充実してきた",
-    furnitureAmount: "7-8 items (full furniture set with wall decorations)",
-  },
-  5: {
-    name: "こだわりの空間",
-    furnitureAmount: "10+ items (fully furnished with personal collections)",
-  },
-};
-
 /**
- * 食事回数から部屋の充実度を計算
+ * 差分ベースの最終プロンプトを組み立て
  */
-export function calculateRoomStage(mealCount: number): RoomStageInfo {
-  let stage: RoomStage;
-  if (mealCount <= 3) {
-    stage = 1;
-  } else if (mealCount <= 7) {
-    stage = 2;
-  } else if (mealCount <= 14) {
-    stage = 3;
-  } else if (mealCount <= 28) {
-    stage = 4;
-  } else {
-    stage = 5;
-  }
-  return {stage, ...ROOM_STAGES[stage]};
-}
-
-/**
- * Compose final bear image prompt from already-generated detail parts.
- * Each part should be a multi-line instruction suitable for an image model.
- */
-export function buildBearImagePromptFromParts(
+export function buildBearImagePromptFromChanges(
   bearFeaturesPart: string,
-  furniturePart: string,
-  wallpaperFloorPart: string,
-  roomStage: ReturnType<typeof calculateRoomStage>
+  furnitureChangePart: string,
+  wallFloorChangePart: string
 ): string {
   return [
     "⚠️ CRITICAL: NO FOOD, NO TEXT in image. No dishes, plates, letters, or words anywhere.",
-    "Generate a clay miniature diorama of a young bear's room.",
+    "=== Bear ===",
     bearFeaturesPart,
-    `=== Room (Level ${roomStage.stage}/5) ===`,
-    furniturePart,
-    wallpaperFloorPart,
+    "=== Room Changes ===",
+    "Apply the following changes to the room. Keep everything else as-is.",
+    furnitureChangePart,
+    wallFloorChangePart,
     COMPOSITION,
     STYLE,
-    // IMAGE_CONSTRAINTS,
-    "⚠️ REMINDER: NO FOOD, NO TEXT. FRONT VIEW with 3 walls visible. Bear doing activity.",
+    "⚠️ REMINDER: NO FOOD, NO TEXT. Keep the frame and base unchanged.",
   ].join("\n\n").trim();
 }
 
 /**
- * 食事履歴から直接家具プロンプトを生成
- * JSON形式でFurnitureItem[]を返すように指示する
+ * 過去7日分の食事履歴から家具の変更を決定
+ * 累積の傾向を見て、小物→家具→大きい家具と成長
  */
-export function buildFurnitureGenerationPromptFromMeals(
-  meals: MealAnalysis[],
-  roomStage: ReturnType<typeof calculateRoomStage>
-): string {
-  const mealHistory = meals.map((m) => {
+export function buildFurnitureChangePrompt(meals: MealAnalysis[]): string {
+  const mealHistory = meals.map((m, i) => {
     const dishes = m.dishes.map((d) => d.name).join(", ");
-    return `- ${dishes}`;
+    const isToday = i === meals.length - 1;
+    return `${isToday ? "[TODAY] " : ""}${dishes}`;
   }).join("\n");
 
   return `You are a room designer for a clay miniature diorama.
-Based on the meal history, design detailed furniture for a young bear's room.
+Based on the meal history, decide what furniture to ADD to the bear's room.
 
-=== Meal History (past 7 days) ===
-${mealHistory || "No meals yet"}
-
-=== Room Level ===
-${roomStage.stage}/5 (${roomStage.name})
-Furniture Amount: ${roomStage.furnitureAmount}
+=== Meal History (7 days, oldest to newest) ===
+${mealHistory}
 
 === Translation Rules ===
-- Japanese food → Low wooden furniture (ちゃぶ台, 座布団), tatami patterns, warm wood tones
+- Japanese food → Low wooden furniture (ちゃぶ台, 座布団), warm wood tones
 - Italian/Western → Mediterranean style, rustic wood tables, terracotta colors
 - Healthy/Salad → Natural materials, light wood, plants as decor
 - Comfort food → Cozy furniture, soft cushions, warm textiles
 - Chinese food → Red/gold accents, elegant carved details
 
-⚠️ IMPORTANT: DO NOT mention food names in output. Translate meal culture to furniture style.
+=== Growth Rules ===
+Based on the CUMULATIVE meal history:
+- Few meals (1-2): Add small items only (cushion, small plant, book)
+- Some meals (3-5): Can add small furniture (side table, lamp)
+- Many meals (5-7): Can add medium furniture (table, shelf)
+- Lots of meals (7+): Can add large furniture (sofa, bed, bookshelf)
 
-=== Output Format (JSON array) ===
-Respond with ONLY a JSON array, no other text:
-[
-  {
-    "type": "furniture type (e.g. ちゃぶ台, ソファ, ベッド)",
-    "pattern": "pattern description (optional, e.g. 魚柄, 波柄)",
-    "color": "color (optional, e.g. 赤, 青)",
-    "placement": "where in the room (optional, e.g. 部屋の中央, 窓際)",
-    "items": ["items on top of this furniture (optional)", "e.g. ノート, 本, 鍋"]
-  }
-]
+Match the room's existing style based on the dominant cuisine in history.
 
-Generate ${roomStage.furnitureAmount} based on the meal culture.
-Include a rug if appropriate for the style.`;
+=== Output Rules ===
+- Add 1-2 items appropriate for the cumulative meal count
+- Match the dominant style from meal history
+- Today's meal can influence the specific item choice
+- DO NOT mention food names
+
+=== Output Format ===
+Respond with a short list:
+- Add: [item description with color/style]
+
+Example:
+- Add: small wooden side table with warm brown finish`;
 }
 
 /**
- * 食事履歴から直接壁紙/床プロンプトを生成
+ * 過去7日分の食事履歴から壁/床の変更を決定
+ * 壁紙・床は傾向が大きく変わった時だけ変更
  */
-export function buildWallpaperFloorGenerationPromptFromMeals(meals: MealAnalysis[]): string {
-  const mealHistory = meals.map((m) => {
+export function buildWallFloorChangePrompt(meals: MealAnalysis[]): string {
+  const mealHistory = meals.map((m, i) => {
     const dishes = m.dishes.map((d) => d.name).join(", ");
-    return `- ${dishes}`;
+    const isToday = i === meals.length - 1;
+    return `${isToday ? "[TODAY] " : ""}${dishes}`;
   }).join("\n");
 
   return `You are a room designer for a clay miniature diorama.
-Based on the meal history, design wallpaper and floor for a young bear's room.
+Based on the meal history, decide what wall/floor elements to CHANGE or ADD.
 
-=== Meal History (past 7 days) ===
-${mealHistory || "No meals yet"}
+=== Meal History (7 days, oldest to newest) ===
+${mealHistory}
+
+=== Elements ===
+Base elements (RARELY change):
+- Wallpaper: pattern, color
+- Floor: material, color
+
+Wall-mounted items (can add based on cumulative meals):
+- shelf, clock, window, framed picture
 
 === Translation Rules ===
-- Japanese food → Soft patterns, tatami or wooden floor, washi paper texture
-- Italian/Western → Textured plaster walls, terracotta tiles or warm wood floor
-- Healthy/Salad → Light colors, natural textures, botanical patterns
-- Comfort food → Warm colors, soft textures, cozy patterns
-- Chinese food → Elegant patterns, red/gold accents, decorative borders
+- Japanese food → Soft patterns, tatami or wooden floor
+- Italian/Western → Textured plaster walls, terracotta or warm wood floor
+- Healthy/Salad → Light colors, natural textures
+- Comfort food → Warm colors, soft textures
+- Chinese food → Elegant patterns, red/gold accents
 
-⚠️ IMPORTANT: DO NOT mention food names. Translate meal mood to wall/floor aesthetics.
+=== IMPORTANT: Wallpaper/Floor Change Rules ===
+- ONLY change wallpaper/floor if the dominant cuisine has SHIFTED significantly
+- Example: If most meals were Japanese, keep Japanese-style walls/floor
+- Example: If meals shifted from Japanese to Italian, THEN change the style
+- If the style already matches the dominant cuisine: "No changes" for wallpaper/floor
 
-Output format (plain text for image generation):
-- Wallpaper: [detailed description with colors, patterns]
-- Floor: [detailed description with materials, colors]
-- Wall decorations: [subtle art or frames]
-- Color harmony: [overall color scheme]`;
+=== Wall-mounted Items ===
+- Can add 0-1 wall items based on cumulative meal count and style
+- Keep it minimal
+
+=== Output Format ===
+Respond with a short list (or "No changes" if none needed):
+- Change wallpaper: [only if style shifted]
+- Change floor: [only if style shifted]
+- Add [wall item]: [description]
+
+Example (when style matches):
+- Add clock: small wooden clock on wall
+
+Example (when style shifted):
+- Change wallpaper: warm terracotta texture with subtle pattern`;
 }
 
 /**
- * 食事履歴から直接クマの特徴プロンプトを生成
+ * 今回の食事からクマの服装/活動を決定
  */
-export function buildBearFeaturesGenerationPromptFromMeals(meals: MealAnalysis[]): string {
-  const mealHistory = meals.map((m) => {
-    const dishes = m.dishes.map((d) => d.name).join(", ");
-    return `- ${dishes}`;
-  }).join("\n");
+export function buildBearFeaturesPromptFromMeal(meal: MealAnalysis): string {
+  const dishes = meal.dishes.map((d) => d.name).join(", ");
 
   return `You are a character designer for a clay miniature diorama.
-Based on the meal history, design a young bear character's appearance and activity.
+Based on this meal, design a young bear character's appearance and activity.
 
-=== Meal History (past 7 days) ===
-${mealHistory || "No meals yet"}
+=== Today's Meal ===
+${dishes}
 
 === Translation Rules ===
 - Japanese food → Traditional or casual Japanese-inspired outfit, peaceful activities
@@ -222,11 +189,9 @@ ${mealHistory || "No meals yet"}
 - Relaxing on floor, stargazing
 
 ⚠️ CRITICAL: Bear should NOT be eating. Choose non-food activity.
-⚠️ DO NOT mention food names. Translate meal culture to outfit/activity style.
+⚠️ DO NOT mention food names.
 
-Output format (plain text for image generation):
-=== Bear ===
-- Young, cute, fluffy bear
+=== Output Format ===
 - Outfit: [detailed outfit based on meal culture]
 - Activity: [specific non-food activity with pose details]
 - Expression: [facial expression and mood]

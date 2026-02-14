@@ -10,8 +10,8 @@ import {
   saveBear,
   getLatestBear,
   saveMeal,
-  getRecentMeals,
   getMealCount,
+  getRecentMeals,
   generateVideoFromBears,
   reincarnate,
   getActiveGroup,
@@ -137,17 +137,13 @@ async function handleBearCreateEvent(event: MessageEvent): Promise<void> {
     const mealAnalysis = await analyzeMeal(imageBase64);
     logger.info("Meal analysis result", {mealAnalysis});
 
-    // 4. 過去7日分の食事履歴を取得
+    // 4. 初回かどうかの判定用 & 過去7日分の食事履歴を取得
+    const currentMealCount = await getMealCount(userId);
     const recentMeals = await getRecentMeals(userId);
     const pastMealAnalyses = recentMeals.map((meal) => meal.analyzedData);
-    logger.info("Past meals fetched", {count: pastMealAnalyses.length});
+    logger.info("Current meal count", {currentMealCount, pastMealsCount: pastMealAnalyses.length});
 
-    // 5. 総食事回数を取得（成長段階の計算用）
-    const currentMealCount = await getMealCount(userId);
-    const totalMealCount = currentMealCount + 1; // 今回の食事を含める
-    logger.info("Total meal count", {totalMealCount});
-
-    // 6. 前のクマ画像を取得（あれば）
+    // 5. 前のクマ画像を取得（あれば）
     let previousBearImageBase64: string | undefined;
     const latestBear = await getLatestBear(userId);
     if (latestBear) {
@@ -155,9 +151,9 @@ async function handleBearCreateEvent(event: MessageEvent): Promise<void> {
       logger.info("Previous bear image fetched", {bearId: latestBear.id});
     }
 
-    // 7. 今日の食事を含めた全食事履歴でくま画像を生成
+    // 6. 過去7日分+今回の食事履歴からくま画像を生成（差分方式）
     const allMeals = [...pastMealAnalyses, mealAnalysis];
-    const bearImageBuffer = await generateBearImage(allMeals, totalMealCount, previousBearImageBase64);
+    const bearImageBuffer = await generateBearImage(allMeals, previousBearImageBase64);
     logger.info("Bear image generated");
 
     // 8. くま画像をStorageにアップロード
@@ -177,7 +173,7 @@ async function handleBearCreateEvent(event: MessageEvent): Promise<void> {
     logger.info("Meal saved", {mealId: savedMeal.id});
 
     // 11. くま画像を pushMessage で送信（初回と2回目以降でメッセージを変える）
-    const isFirstTime = pastMealAnalyses.length === 0;
+    const isFirstTime = currentMealCount === 0;
     const messages = isFirstTime ?
       [
         {
@@ -283,7 +279,7 @@ async function handleVideoGenerationEvent(event: MessageEvent): Promise<void> {
 
     // 3. 動画をpushMessageで送信
     // await lineClient.pushMessage({
-      // to: userId,
+    // to: userId,
     await lineClient.replyMessage({
       replyToken,
       messages: [
@@ -479,7 +475,7 @@ async function handleResetFromPostback(
     messages: [
       {
         type: "text",
-        text: "🐻✨ 輪廻転生しました！\n\n新しい人生の始まりだよ！\nまた食事の写真を送ってね！",
+        text: "🐻✨ 転生しました！\n\n新しい人生の始まりだよ！\nまた食事の写真を送ってね！",
       },
     ],
   });

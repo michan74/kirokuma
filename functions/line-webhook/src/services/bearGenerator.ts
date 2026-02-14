@@ -4,11 +4,10 @@ import * as path from "path";
 import * as logger from "firebase-functions/logger";
 import {MealAnalysis} from "../models";
 import {
-  buildBearImagePromptFromParts,
-  calculateRoomStage,
-  buildFurnitureGenerationPromptFromMeals,
-  buildWallpaperFloorGenerationPromptFromMeals,
-  buildBearFeaturesGenerationPromptFromMeals,
+  buildBearImagePromptFromChanges,
+  buildFurnitureChangePrompt,
+  buildWallFloorChangePrompt,
+  buildBearFeaturesPromptFromMeal,
 } from "../prompts";
 
 const PROJECT_ID = process.env.GCP_PROJECT_ID || "";
@@ -20,47 +19,26 @@ const ai = new GoogleGenAI({
   location: LOCATION,
 });
 
-/** 空の部屋画像探索パス */
-const EMPTY_ROOM_IMAGE_CANDIDATES = [
-  path.join(__dirname, "../assets/empty-room-2.png"),
-  path.join(__dirname, "../../src/assets/empty-room-2.png"),
-  path.join(process.cwd(), "src/assets/empty-room-2.png"),
-];
-
-function resolveEmptyRoomImagePath(): string {
-  for (const candidate of EMPTY_ROOM_IMAGE_CANDIDATES) {
-    if (fs.existsSync(candidate)) {
-      return candidate;
-    }
-  }
-
-  throw new Error("Empty room reference image not found");
-}
+/** 空の部屋画像パス */
+const EMPTY_ROOM_IMAGE_PATH = path.join(__dirname, "../assets/empty-room-3.png");
 
 /**
  * 空の部屋の参照画像を読み込む
  */
 function loadEmptyRoomImage(): string {
-  const imagePath = resolveEmptyRoomImagePath();
-  const imageBuffer = fs.readFileSync(imagePath);
+  const imageBuffer = fs.readFileSync(EMPTY_ROOM_IMAGE_PATH);
   return imageBuffer.toString("base64");
 }
 
 /**
- * Step2: 食事履歴から直接くま画像を生成（参照画像あり）
- * RoomStyleを経由せずに、食事履歴から直接プロンプトを生成
- * @param meals 食事履歴
- * @param totalMealCount 総食事回数
+ * 過去7日分の食事履歴から差分でくま画像を生成（参照画像あり）
+ * @param meals 過去7日分の食事履歴（今回の食事を含む）
  * @param referenceImageBase64 参照画像（Base64）- 初期は空の部屋、以降は前のクマ画像
  */
 async function generateImageFromMeals(
   meals: MealAnalysis[],
-  totalMealCount: number,
   referenceImageBase64: string
 ): Promise<Buffer> {
-  // Calculate room stage
-  const roomStage = calculateRoomStage(totalMealCount);
-
   // Generate detailed prompt parts via text AI
   async function generateDetailFromAI(instruction: string): Promise<string> {
     const resp = await ai.models.generateContent({
@@ -77,33 +55,38 @@ async function generateImageFromMeals(
     return txt.trim();
   }
 
-  // Generate prompt parts directly from meals
-  const furnitureInstruction = buildFurnitureGenerationPromptFromMeals(meals, roomStage);
-  const wallpaperFloorInstruction = buildWallpaperFloorGenerationPromptFromMeals(meals);
-  const bearFeaturesInstruction = buildBearFeaturesGenerationPromptFromMeals(meals);
+  // 今日の食事（配列の最後）
+  const todaysMeal = meals[meals.length - 1];
 
-  const [furniturePart, wallpaperFloorPart, bearFeaturesPart] = await Promise.all([
+  // Generate change prompts
+  // 家具と壁/床は過去7日分の累積を見る
+  const furnitureInstruction = buildFurnitureChangePrompt(meals);
+  const wallFloorInstruction = buildWallFloorChangePrompt(meals);
+  // クマは今日の食事だけで決める
+  const bearFeaturesInstruction = buildBearFeaturesPromptFromMeal(todaysMeal);
+
+  const [furnitureChangePart, wallFloorChangePart, bearFeaturesPart] = await Promise.all([
     generateDetailFromAI(furnitureInstruction),
-    generateDetailFromAI(wallpaperFloorInstruction),
+    generateDetailFromAI(wallFloorInstruction),
     generateDetailFromAI(bearFeaturesInstruction),
   ]);
 
   const bearPrompts = {
-    furniture: furniturePart,
-    wallpaperFloor: wallpaperFloorPart,
+    furnitureChange: furnitureChangePart,
+    wallFloorChange: wallFloorChangePart,
     bearFeatures: bearFeaturesPart,
   };
 
   logger.info("Generated bear prompt parts", {bearPrompts});
 
-  const prompt = buildBearImagePromptFromParts(bearFeaturesPart, furniturePart, wallpaperFloorPart, roomStage);
+  const prompt = buildBearImagePromptFromChanges(bearFeaturesPart, furnitureChangePart, wallFloorChangePart);
 
   console.log("=== くま生成プロンプト (1/3: Bear Features) ===");
   console.log(bearFeaturesPart);
-  console.log("\n=== くま生成プロンプト (2/3: Furniture) ===");
-  console.log(furniturePart);
-  console.log("\n=== くま生成プロンプト (3/3: Wallpaper/Floor) ===");
-  console.log(wallpaperFloorPart);
+  console.log("\n=== くま生成プロンプト (2/3: Furniture Change) ===");
+  console.log(furnitureChangePart);
+  console.log("\n=== くま生成プロンプト (3/3: Wall/Floor Change) ===");
+  console.log(wallFloorChangePart);
   console.log("\n=== 完全なプロンプト ===");
   console.log(prompt);
 
@@ -113,7 +96,7 @@ async function generateImageFromMeals(
       {
         role: "user",
         parts: [
-          {text: `Edit this room image based on the following instructions:\n\n${prompt}`},
+          {text: `Edit the interior of this miniature room box. Keep the frame and base as-is.\n\n${prompt}`},
           {
             inlineData: {
               mimeType: "image/png",
@@ -135,14 +118,12 @@ async function generateImageFromMeals(
 }
 
 /**
- * 過去の食事履歴からくま画像を生成する（直接生成方式）
- * @param meals 過去7日分の食事履歴
- * @param totalMealCount 総食事回数（成長段階の計算に使用）
+ * 過去7日分の食事履歴からくま画像を生成する（差分方式）
+ * @param meals 過去7日分の食事履歴（今回の食事を含む）
  * @param previousBearImageBase64 前のクマ画像（Base64）- 初回はundefined
  */
 export async function generateBearImage(
   meals: MealAnalysis[],
-  totalMealCount: number,
   previousBearImageBase64?: string
 ): Promise<Buffer> {
   // 参照画像を決定: 前のクマ画像があればそれを使う、なければ空の部屋画像
@@ -151,8 +132,8 @@ export async function generateBearImage(
     type: previousBearImageBase64 ? "previousBear" : "emptyRoom",
   });
 
-  // 食事履歴から直接画像を生成
-  return generateImageFromMeals(meals, totalMealCount, referenceImage);
+  // 過去7日分の食事履歴から差分で画像を生成
+  return generateImageFromMeals(meals, referenceImage);
 }
 
 /**

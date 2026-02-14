@@ -70,7 +70,7 @@ const RICH_MENU_CONFIG = {
         type: "postback",
         label: "テンセイ",
         data: "action=reset",
-        displayText: "輪廻転生するよ",
+        displayText: "転生するよ",
       },
     },
   ],
