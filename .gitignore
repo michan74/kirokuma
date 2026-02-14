@@ -70,3 +70,5 @@ venv/
 .dataconnect
 
 .emi/*
+
+.DS_Store
