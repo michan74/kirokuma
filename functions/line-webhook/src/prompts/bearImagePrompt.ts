@@ -62,40 +62,38 @@ export function buildFurnitureChangePrompt(meals: MealAnalysis[]): string {
     return `${isToday ? "[TODAY] " : ""}${dishes} [${tags}]`;
   }).join("\n");
 
-  return `You are a room designer for a clay miniature diorama.
-Based on the meal history, decide what furniture to ADD to the bear's room.
+  return `You are a room designer for a cute miniature diorama.
+Based on the 7-day meal history, decide what furniture to ADD or REPLACE.
 
 === Meal History (7 days, oldest to newest) ===
 ${mealHistory}
 
-=== Translation Rules ===
-- Japanese food → Low wooden furniture (ちゃぶ台, 座布団), warm wood tones
-- Italian/Western → Mediterranean style, rustic wood tables, terracotta colors
-- Healthy/Salad → Natural materials, light wood, plants as decor
-- Comfort food → Cozy furniture, soft cushions, warm textiles
-- Chinese food → Red/gold accents, elegant carved details
+=== Design Philosophy ===
+- Look at ALL 7 days - find repeated ingredients or tags
+- Repeated items = stronger influence on furniture style!
+  - Example: "mushroom" appears 3 times → mushroom-themed furniture
+  - Example: "cozy" tag appears often → warm, soft furniture
+- Be creative and playful, like Animal Crossing furniture
 
 === Growth Rules ===
 Based on the CUMULATIVE meal history:
-- Few meals (1-2): Add small items only (cushion, small plant, book)
-- Some meals (3-5): Can add small furniture (side table, lamp)
-- Many meals (5-7): Can add medium furniture (table, shelf)
-- Lots of meals (7+): Can add large furniture (sofa, bed, bookshelf)
+- Few meals (1-2): Add small items only
+- Some meals (3-5): Can add small furniture
+- Many meals (5-7): Can add medium furniture
+- Lots of meals (7+): Can add large furniture
 
-Match the room's existing style based on the dominant tags in history.
+=== Room Space ===
+- The room is SMALL - only space for 3-5 items total
+- If room is full, REPLACE an old item instead of adding
 
 === Output Rules ===
-- Add 1-2 items appropriate for the cumulative meal count
-- Match the dominant style from meal history
-- Today's meal can influence the specific item choice
-- DO NOT mention food names
+- 1 action per meal (Add or Replace)
+- Furniture should reflect the DOMINANT ingredients/tags from history
+- DO NOT mention food names directly
 
 === Output Format ===
-Respond with a short list:
-- Add: [item description with color/style]
-
-Example:
-- Add: small wooden side table with warm brown finish`;
+- Add: [item inspired by dominant ingredients/tags] OR
+- Replace: [old item] → [new item that better reflects meal history]`;
 }
 
 /**
@@ -110,49 +108,34 @@ export function buildWallFloorChangePrompt(meals: MealAnalysis[]): string {
     return `${isToday ? "[TODAY] " : ""}${dishes} [${tags}]`;
   }).join("\n");
 
-  return `You are a room designer for a clay miniature diorama.
-Based on the meal history, decide what wall/floor elements to CHANGE or ADD.
+  return `You are a room designer for a cute miniature diorama.
+Based on the 7-day meal history, decide what wall/floor to CHANGE.
 
 === Meal History (7 days, oldest to newest) ===
 ${mealHistory}
 
-=== Elements ===
-Base elements (RARELY change):
-- Wallpaper: pattern, color
-- Floor: material, color
+=== Design Philosophy ===
+- Look at ALL 7 days - find repeated ingredients or tags
+- Repeated items = stronger influence on wall/floor style!
+  - Example: "fish" appears often → ocean-themed wallpaper, sandy floor
+  - Example: "cozy" tag repeated → warm colors, soft textures
+- Be creative! Like Animal Crossing room themes
 
-Wall-mounted items (can add based on cumulative meals):
-- shelf, clock, window, framed picture
+=== Elements to Change ===
+- Wallpaper: pattern, color, theme (can be playful!)
+- Floor: material, color, pattern
+- Wall decor: clock, picture, shelf, window, poster
 
-=== Translation Rules ===
-- Japanese food → Soft patterns, tatami or wooden floor
-- Italian/Western → Textured plaster walls, terracotta or warm wood floor
-- Healthy/Salad → Light colors, natural textures
-- Comfort food → Warm colors, soft textures
-- Chinese food → Elegant patterns, red/gold accents
-
-=== IMPORTANT: Wallpaper/Floor Change Rules ===
-- Look at the dishes, ingredients, and tags to understand the meal style
-- ONLY change wallpaper/floor if the overall style has SHIFTED significantly
-- Example: If most meals are Japanese style, keep Japanese walls/floor
-- Example: If meals shifted to Italian style, THEN change
-- If the style already matches: "No changes" for wallpaper/floor
-
-=== Wall-mounted Items ===
-- Can add 0-1 wall items based on cumulative meal count and style
-- Keep it minimal
+=== Change Rules (based on trend strength) ===
+- STRONG trend (same tags/ingredients appear 4+ times): Change wallpaper AND floor
+- MEDIUM trend (same tags/ingredients appear 2-3 times): Change wallpaper OR floor
+- WEAK trend (no clear pattern): Only change wall decor (clock, picture, shelf)
 
 === Output Format ===
-Respond with a short list (or "No changes" if none needed):
-- Change wallpaper: [only if style shifted]
-- Change floor: [only if style shifted]
-- Add [wall item]: [description]
-
-Example (when style matches):
-- Add clock: small wooden clock on wall
-
-Example (when style shifted):
-- Change wallpaper: warm terracotta texture with subtle pattern`;
+Pick 1-2 changes inspired by the meal history:
+- Wallpaper: [new style reflecting dominant ingredients/tags]
+- Floor: [new style reflecting dominant ingredients/tags]
+- Wall decor: [add or replace item]`;
 }
 
 /**
