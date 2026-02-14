@@ -1,7 +1,7 @@
 import {setGlobalOptions} from "firebase-functions";
 import {onRequest} from "firebase-functions/https";
 import * as logger from "firebase-functions/logger";
-import {messagingApi, WebhookEvent, MessageEvent} from "@line/bot-sdk";
+import {messagingApi, WebhookEvent, MessageEvent, PostbackEvent} from "@line/bot-sdk";
 import {
   analyzeMeal,
   generateBearImage,
@@ -52,6 +52,12 @@ export const lineWebhook = onRequest(
 
     // 各イベントを処理
     for (const event of events) {
+      // Postbackイベントの処理
+      if (event.type === "postback") {
+        await handlePostbackEvent(event as PostbackEvent);
+        continue;
+      }
+
       // メッセージイベント以外は無視
       if (event.type !== "message") {
         continue;
@@ -309,6 +315,149 @@ async function handleVideoGenerationEvent(event: MessageEvent): Promise<void> {
       logger.error("Failed to send error message", {error: pushError});
     }
   }
+}
+
+// Postbackイベント処理
+async function handlePostbackEvent(event: PostbackEvent): Promise<void> {
+  const replyToken = event.replyToken;
+  const userId = event.source.userId;
+  const data = event.postback.data;
+
+  if (!userId) {
+    logger.error("userId not found in postback event source");
+    return;
+  }
+
+  logger.info("Postback received", {userId, data});
+
+  // クエリパラメータをパース
+  const params = new URLSearchParams(data);
+  const action = params.get("action");
+
+  switch (action) {
+  case "generate_video":
+    // 動画生成処理
+    await handleVideoGenerationFromPostback(userId, replyToken);
+    break;
+
+  case "reset":
+    // リセット（転生）処理
+    await handleResetFromPostback(userId, replyToken);
+    break;
+
+  default:
+    logger.warn("Unknown postback action", {action, data});
+  }
+}
+
+// Postbackからの動画生成処理
+async function handleVideoGenerationFromPostback(
+  userId: string,
+  replyToken: string
+): Promise<void> {
+  logger.info("Video generation requested via postback", {userId});
+
+  try {
+    // Python動画生成関数を呼び出し
+    const videoGeneratorUrl =
+      process.env.VIDEO_GENERATOR_URL ||
+      "https://generate-video-python-j7lkvu6b3a-uc.a.run.app";
+
+    logger.info("Calling video generator", {url: videoGeneratorUrl, userId});
+
+    const response = await fetch(videoGeneratorUrl, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({userId, imageCount: 14}),
+    });
+
+    logger.info("Video generator response", {
+      status: response.status,
+      ok: response.ok,
+    });
+
+    const resultText = await response.text();
+    logger.info("Video generator response body", {
+      body: resultText.substring(0, 500),
+    });
+
+    let result: {videoUrl?: string; thumbnailUrl?: string; error?: string};
+    try {
+      result = JSON.parse(resultText);
+    } catch {
+      throw new Error(`Invalid JSON response: ${resultText.substring(0, 200)}`);
+    }
+
+    if (!response.ok || !result.videoUrl || !result.thumbnailUrl) {
+      throw new Error(
+        result.error || `Video generation failed (status: ${response.status})`
+      );
+    }
+
+    logger.info("Video generated", {
+      videoUrl: result.videoUrl,
+      thumbnailUrl: result.thumbnailUrl,
+    });
+
+    // 動画をreplyMessageで送信
+    await lineClient.replyMessage({
+      replyToken,
+      messages: [
+        {
+          type: "text",
+          text: "くまの成長動画ができたよ！🐻🎬",
+        },
+        {
+          type: "video",
+          originalContentUrl: result.videoUrl,
+          previewImageUrl: result.thumbnailUrl,
+        },
+      ],
+    });
+    logger.info("Sent video via replyMessage");
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorStack = error instanceof Error ? error.stack : "";
+    logger.error("Error generating video from postback", {
+      message: errorMessage,
+      stack: errorStack,
+    });
+
+    // エラーメッセージをreplyMessageで送信
+    try {
+      await lineClient.replyMessage({
+        replyToken,
+        messages: [
+          {
+            type: "text",
+            text: `ごめんね、動画生成に失敗しちゃった🐻💦\n${errorMessage}`,
+          },
+        ],
+      });
+    } catch (replyError) {
+      logger.error("Failed to send error message via reply", {error: replyError});
+    }
+  }
+}
+
+// Postbackからのリセット（転生）処理
+async function handleResetFromPostback(
+  userId: string,
+  replyToken: string
+): Promise<void> {
+  logger.info("Reset requested via postback", {userId});
+
+  // TODO: 実際のリセット処理を実装
+
+  await lineClient.replyMessage({
+    replyToken,
+    messages: [
+      {
+        type: "text",
+        text: "🐻✨ 輪廻転生の準備中...\n\nこの機能はまだ開発中だよ！\nもう少し待っててね！",
+      },
+    ],
+  });
 }
 
 // 動画生成エンドポイント（メモリ・タイムアウト増量）
