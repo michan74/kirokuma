@@ -4,6 +4,7 @@ import * as logger from "firebase-functions/logger";
 import {messagingApi, WebhookEvent, MessageEvent, PostbackEvent} from "@line/bot-sdk";
 import {
   analyzeMeal,
+  NotFoodError,
   generateBearImage,
   uploadImage,
   downloadImageAsBase64,
@@ -210,6 +211,22 @@ async function handleBearCreateEvent(event: MessageEvent): Promise<void> {
     });
     logger.info("Sent bear image via pushMessage");
   } catch (error) {
+    // TODO; 最終的にはpush Messageへ
+    // 食べ物以外の画像の場合
+    if (error instanceof NotFoodError) {
+      logger.info("Not a food image, sending error message");
+      await lineClient.replyMessage({
+        replyToken,
+        messages: [
+          {
+            type: "text",
+            text: "うまく食べ物を認識できなかったよ\n食べ物の写真を送ってね🐻🍽️",
+          },
+        ],
+      });
+      return;
+    }
+
     const errorMessage = error instanceof Error ? error.message : String(error);
     const errorStack = error instanceof Error ? error.stack : "";
     logger.error("Error processing image", {message: errorMessage, stack: errorStack});

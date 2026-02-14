@@ -5,6 +5,16 @@ import {MEAL_ANALYSIS_PROMPT} from "../prompts";
 const PROJECT_ID = process.env.GCP_PROJECT_ID || "";
 const LOCATION = "us-central1";
 
+/**
+ * 食べ物以外の画像が送られた場合のエラー
+ */
+export class NotFoodError extends Error {
+  constructor() {
+    super("Not a food image");
+    this.name = "NotFoodError";
+  }
+}
+
 const ai = new GoogleGenAI({
   vertexai: true,
   project: PROJECT_ID,
@@ -41,6 +51,12 @@ export async function analyzeMeal(imageBase64: string): Promise<MealAnalysis> {
     throw new Error("Failed to parse meal analysis response");
   }
 
-  const parsed = JSON.parse(jsonMatch[0]) as MealAnalysis;
-  return parsed;
+  const parsed = JSON.parse(jsonMatch[0]);
+
+  // 食べ物でない場合はエラーをthrow
+  if (parsed.isFood === false) {
+    throw new NotFoodError();
+  }
+
+  return parsed as MealAnalysis;
 }
