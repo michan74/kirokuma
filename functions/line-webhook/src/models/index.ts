@@ -36,11 +36,27 @@ export interface MealAnalysis {
 }
 
 /**
+ * 家具アイテム
+ */
+export interface FurnitureItem {
+  /** 家具の種類 例: "ちゃぶ台", "座布団", "布団" */
+  type: string;
+  /** 柄・デザイン 例: "魚柄", "波柄" */
+  pattern?: string;
+  /** 色 例: "赤", "青" */
+  color?: string;
+  /** 配置場所 例: "部屋の中央", "窓際" */
+  placement?: string;
+  /** 上に乗っている小物 例: ["鍋", "ミトン", "ノート"] */
+  items?: string[];
+}
+
+/**
  * 部屋のスタイル（Step1で生成）
  * 食材情報から生成され、画像生成に使用される
  */
 export interface RoomStyle {
-  /** 部屋のスタイル 例: "Mediterranean", "Japanese traditional" */
+  /** 部屋のスタイル 例: "Japanese traditional", "Mediterranean" */
   roomStyle: string;
   /** 壁紙の色・パターン 例: "warm terracotta with subtle wave pattern" */
   wallpaper: string;
@@ -48,8 +64,8 @@ export interface RoomStyle {
   floor: string;
   /** ラグの有無・スタイル 例: "cozy knitted rug", "none", "round woven mat" */
   rug: string;
-  /** 家具のスタイル 例: "rustic wooden with linen accents" */
-  furnitureStyle: string;
+  /** 構造化された家具リスト */
+  furniture: FurnitureItem[];
   /** クマの服装 例: "linen apron over white shirt" */
   outfit: string;
   /** クマの活動・趣味 例: "painting on an easel" */

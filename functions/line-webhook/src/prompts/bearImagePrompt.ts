@@ -1,17 +1,18 @@
-import {RoomStyle, MealAnalysis} from "../models";
+import {MealAnalysis} from "../models";
+
+// 構図
+const COMPOSITION = `
+⚠️ COMPOSITION (MUST FOLLOW):
+- Straight-on front view: The camera is leveled and faces the center corner directly.
+- V-shaped room layout: Only two walls are visible (left and right), meeting at a center vertical line.
+- Dollhouse cutaway: A cross-section view like a theater stage with the front walls removed.
+- Symmetrical composition: Balanced view of the floor and the two meeting walls.
+- ❌ STRICTLY NO Isometric view: No tilted or diagonal bird's-eye angles.
+`.trim();
 
 /**
  * スタイル定義 - 粘土ミニチュア風の部屋
  */
-const COMPOSITION = `
-⚠️ COMPOSITION (MUST FOLLOW):
-- FRONT VIEW ONLY - camera faces the back wall directly
-- THREE walls visible: back wall (center) + left wall + right wall
-- Floor and ceiling also visible
-- Like a theater stage or dollhouse with front wall removed
-- ❌ NO diagonal angle, NO corner view, NO isometric view
-`.trim();
-
 const STYLE = `
 Style:
 - Miniature diorama inside a glass dome/snow globe
@@ -20,23 +21,22 @@ Style:
 - NO TEXT, NO WATERMARK anywhere
 `.trim();
 
-const IMAGE_CONSTRAINTS = `
-Image constraints (MUST FOLLOW):
-- Do NOT change the canvas dimensions or add borders/margins/padding to the canvas.
-- Preserve the reference image size exactly. Output should use the same canvas size.
-- Allow the bear to be positioned freely in the room. Examples:
-  - left, right, near the window
-  - lying on the floor, on the bed
-  - jumping, bathing, playing
-- The bear must remain fully visible within the canvas (no cropping of the subject).
-- Keep the subject reasonably large so it is the focal point.
-  - Exact centering is NOT required.
-- If the bear is positioned off-center, adjust background elements subtly (scale/shift).
-- Ensure the overall composition remains natural and the bear is not tiny.
-- Do NOT add transparent padding, borders, or extend the canvas.
-- Treat the provided reference image as a strict layout template for camera angle and perspective.
-  Only modify contents inside the scene (objects, bear pose, scale); do not change camera geometry.
-`.trim();
+// const IMAGE_CONSTRAINTS = `
+// Image constraints (MUST FOLLOW):
+// - Do NOT change the canvas dimensions or add borders/margins/padding to the canvas.
+// - Preserve the reference image size exactly. Output should use the same canvas size.
+// - Allow the bear to be positioned freely in the room. Examples:
+//   - left, right, near the window
+//   - lying on the floor, on the bed
+//   - jumping, bathing, playing
+// - The bear must remain fully visible within the canvas (no cropping of the subject).
+// - Keep the subject reasonably large so it is the focal point.
+//   - Exact centering is NOT required.
+// - If the bear is positioned off-center, adjust background elements subtly (scale/shift).
+// - Do NOT add transparent padding, borders, or extend the canvas.
+// - Treat the provided reference image as a strict layout template for camera angle and perspective.
+//   Only modify contents inside the scene (objects, bear pose, scale); do not change camera geometry.
+// `.trim();
 
 /** 部屋の充実度段階の定義 */
 type RoomStage = 1 | 2 | 3 | 4 | 5;
@@ -50,23 +50,23 @@ interface RoomStageInfo {
 const ROOM_STAGES: Record<RoomStage, Omit<RoomStageInfo, "stage">> = {
   1: {
     name: "はじまりの部屋",
-    furnitureAmount: "Nearly empty - only TWO small items",
+    furnitureAmount: "Nearly empty - only 1-2 small items",
   },
   2: {
     name: "少し落ち着いた",
-    furnitureAmount: "Small table, one chair, simple lamp, basic rug",
+    furnitureAmount: "3-4 items (basic furniture and small decorations)",
   },
   3: {
     name: "生活感が出てきた",
-    furnitureAmount: "Sofa, shelves, curtains, plants, proper ceiling light",
+    furnitureAmount: "5-6 items (furniture, decorations, and lighting)",
   },
   4: {
     name: "充実してきた",
-    furnitureAmount: "Full furniture set, art on walls, decorative lighting",
+    furnitureAmount: "7-8 items (full furniture set with wall decorations)",
   },
   5: {
     name: "こだわりの空間",
-    furnitureAmount: "Fully furnished, collections displayed, personal touches everywhere",
+    furnitureAmount: "10+ items (fully furnished with personal collections)",
   },
 };
 
@@ -75,168 +75,18 @@ const ROOM_STAGES: Record<RoomStage, Omit<RoomStageInfo, "stage">> = {
  */
 export function calculateRoomStage(mealCount: number): RoomStageInfo {
   let stage: RoomStage;
-  if (mealCount <= 6) {
+  if (mealCount <= 3) {
     stage = 1;
-  } else if (mealCount <= 15) {
+  } else if (mealCount <= 7) {
     stage = 2;
-  } else if (mealCount <= 27) {
+  } else if (mealCount <= 14) {
     stage = 3;
-  } else if (mealCount <= 39) {
+  } else if (mealCount <= 28) {
     stage = 4;
   } else {
     stage = 5;
   }
   return {stage, ...ROOM_STAGES[stage]};
-}
-
-/**
- * Step2: 部屋スタイルからくま画像を生成するプロンプト
- * 食材名は含まれない - RoomStyleのみを使用
- */
-export function buildBearImagePrompt(roomStyle: RoomStyle, totalMealCount: number): string {
-  const roomStage = calculateRoomStage(totalMealCount);
-  // Build modular prompt parts
-  const furniturePart = buildFurniturePrompt(roomStyle, roomStage);
-  const wallpaperFloorPart = buildWallpaperFloorPrompt(roomStyle);
-  const bearFeaturesPart = buildBearFeaturesPrompt(roomStyle);
-
-  return [
-    "⚠️ CRITICAL: NO FOOD, NO TEXT in image. No dishes, plates, letters, or words anywhere.",
-    "Generate a clay miniature diorama of a young bear's room.",
-    bearFeaturesPart,
-    `=== Room (Level ${roomStage.stage}/5) ===`,
-    furniturePart,
-    wallpaperFloorPart,
-    COMPOSITION,
-    STYLE,
-    IMAGE_CONSTRAINTS,
-    "⚠️ REMINDER: NO FOOD, NO TEXT. FRONT VIEW with 3 walls visible. Bear doing activity.",
-  ].join("\n\n").trim();
-}
-
-/**
- * Build prompt for furniture generation (amount, major furniture, decorative items)
- */
-export function buildFurniturePrompt(roomStyle: RoomStyle, roomStage: ReturnType<typeof calculateRoomStage>): string {
-  return `- Furniture amount: ${roomStage.furnitureAmount}
-- Furniture style: ${roomStyle.furnitureStyle}
-- Rug: ${roomStyle.rug}
-- Suggested items: suggest appropriate items matching the furniture amount and style (e.g. table, chair, sofa)
-- Suggested small props: shelves, lamp, plants
-- Arrange items naturally for a cozy clay miniature scene`;
-}
-
-/**
- * Build prompt for wallpaper and floor generation
- */
-export function buildWallpaperFloorPrompt(roomStyle: RoomStyle): string {
-  return `- Wallpaper: ${roomStyle.wallpaper}
-- Floor: ${roomStyle.floor}
-- Wall decorations: subtle art or frames consistent with the room style (optional)
-- Color harmony: ensure wallpaper and floor colors complement the bear and furniture`;
-}
-
-/**
- * Build prompt for bear appearance and features
- */
-export function buildBearFeaturesPrompt(roomStyle: RoomStyle): string {
-  return `=== Bear ===
-- Young, cute, fluffy bear
-- Outfit: ${roomStyle.outfit}
-- Activity: ${roomStyle.activity}
-- Expression: ${roomStyle.expression}
-- Lighting: ${roomStyle.lighting}`;
-}
-
-/**
- * 家具の詳細を生成するためのLLMプロンプト
- * このプロンプトをLLMに投げて、具体的な家具の配置や種類を生成する
- */
-export function buildFurnitureGenerationPrompt(
-  roomStyle: RoomStyle,
-  roomStage: ReturnType<typeof calculateRoomStage>
-): string {
-  return `You are a room designer for a clay miniature diorama.
-Generate detailed furniture arrangement for a young bear's room.
-
-Room Level: ${roomStage.stage}/5 (${roomStage.name})
-Furniture Amount Guideline: ${roomStage.furnitureAmount}
-Furniture Style: ${roomStyle.furnitureStyle}
-Rug: ${roomStyle.rug}
-
-Requirements:
-- List specific furniture items appropriate for the room level
-- Describe placement and arrangement naturally
-- Include small props (shelves, lamp, plants) as appropriate
-- Ensure items match the furniture style
-- Create a cozy, lived-in feeling
-
-Output format (plain text, suitable for image generation prompt):
-- Furniture amount: [specific count or description]
-- Furniture style: [description]
-- Rug: [description]
-- Items: [list specific items]
-- Small props: [list specific props]
-- Arrangement: [describe natural placement]`;
-}
-
-/**
- * 壁紙/床の詳細を生成するためのLLMプロンプト
- * このプロンプトをLLMに投げて、具体的な壁紙と床のデザインを生成する
- */
-export function buildWallpaperFloorGenerationPrompt(
-  roomStyle: RoomStyle
-): string {
-  return `You are a room designer for a clay miniature diorama.
-Generate detailed wallpaper and floor design for a young bear's room.
-
-Wallpaper Theme: ${roomStyle.wallpaper}
-Floor Theme: ${roomStyle.floor}
-Overall Style: Clay/polymer texture, pastel colors, cozy atmosphere
-
-Requirements:
-- Describe specific patterns, colors, and textures for wallpaper
-- Describe specific materials, colors, and textures for floor
-- Suggest wall decorations that complement the style
-- Ensure color harmony between wallpaper, floor, and overall room theme
-- Keep descriptions suitable for clay miniature aesthetic
-
-Output format (plain text, suitable for image generation prompt):
-- Wallpaper: [detailed description with colors, patterns, texture]
-- Floor: [detailed description with materials, colors, texture]
-- Wall decorations: [specific items and placement]
-- Color harmony: [how colors work together]`;
-}
-
-/**
- * クマの特徴の詳細を生成するためのLLMプロンプト
- * このプロンプトをLLMに投げて、具体的なクマの見た目やポーズを生成する
- */
-export function buildBearFeaturesGenerationPrompt(roomStyle: RoomStyle): string {
-  return `You are a character designer for a clay miniature diorama. Generate detailed bear character features and pose.
-
-Character Context:
-- Outfit Theme: ${roomStyle.outfit}
-- Activity: ${roomStyle.activity}
-- Expression: ${roomStyle.expression}
-- Lighting: ${roomStyle.lighting}
-
-Requirements:
-- Describe specific outfit details (colors, style, accessories)
-- Describe specific activity and pose in detail
-- Describe facial expression and body language
-- Describe how lighting affects the scene mood
-- Keep the bear young, cute, and fluffy
-- Ensure the activity is engaging and natural
-- ⚠️ NO FOOD in the scene - bear should be doing activity, not eating
-
-Output format (plain text, suitable for image generation prompt):
-=== Bear ===
-- Young, cute, fluffy bear
-- Outfit: [detailed outfit description]
-- Activity: [detailed activity and pose]
-- Expression: [detailed facial expression and mood]
-- Lighting: [detailed lighting description and mood]`;
 }
 
 /**
@@ -258,14 +108,14 @@ export function buildBearImagePromptFromParts(
     wallpaperFloorPart,
     COMPOSITION,
     STYLE,
-    IMAGE_CONSTRAINTS,
+    // IMAGE_CONSTRAINTS,
     "⚠️ REMINDER: NO FOOD, NO TEXT. FRONT VIEW with 3 walls visible. Bear doing activity.",
   ].join("\n\n").trim();
 }
 
 /**
  * 食事履歴から直接家具プロンプトを生成
- * RoomStyleを経由せずに食事から家具の詳細を生成する
+ * JSON形式でFurnitureItem[]を返すように指示する
  */
 export function buildFurnitureGenerationPromptFromMeals(
   meals: MealAnalysis[],
@@ -276,7 +126,7 @@ export function buildFurnitureGenerationPromptFromMeals(
     return `- ${dishes}`;
   }).join("\n");
 
-  return `3You are a room designer for a clay miniature diorama.
+  return `You are a room designer for a clay miniature diorama.
 Based on the meal history, design detailed furniture for a young bear's room.
 
 === Meal History (past 7 days) ===
@@ -287,21 +137,28 @@ ${roomStage.stage}/5 (${roomStage.name})
 Furniture Amount: ${roomStage.furnitureAmount}
 
 === Translation Rules ===
-- Japanese food → Low wooden furniture, tatami patterns, warm wood tones
-- Italian/Western → Mediterranean style, rustic wood, terracotta colors
+- Japanese food → Low wooden furniture (ちゃぶ台, 座布団), tatami patterns, warm wood tones
+- Italian/Western → Mediterranean style, rustic wood tables, terracotta colors
 - Healthy/Salad → Natural materials, light wood, plants as decor
 - Comfort food → Cozy furniture, soft cushions, warm textiles
 - Chinese food → Red/gold accents, elegant carved details
 
 ⚠️ IMPORTANT: DO NOT mention food names in output. Translate meal culture to furniture style.
 
-Output format (plain text for image generation):
-- Furniture amount: [description]
-- Furniture style: [detailed style based on meals]
-- Items: [specific furniture pieces]
-- Small props: [decorative items]
-- Rug: [description]
-- Arrangement: [placement description]`;
+=== Output Format (JSON array) ===
+Respond with ONLY a JSON array, no other text:
+[
+  {
+    "type": "furniture type (e.g. ちゃぶ台, ソファ, ベッド)",
+    "pattern": "pattern description (optional, e.g. 魚柄, 波柄)",
+    "color": "color (optional, e.g. 赤, 青)",
+    "placement": "where in the room (optional, e.g. 部屋の中央, 窓際)",
+    "items": ["items on top of this furniture (optional)", "e.g. ノート, 本, 鍋"]
+  }
+]
+
+Generate ${roomStage.furnitureAmount} based on the meal culture.
+Include a rug if appropriate for the style.`;
 }
 
 /**
