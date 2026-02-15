@@ -16,56 +16,58 @@ export function buildBearFlexMessage(imageUrls: string[], altText = "クマ画�
   const maxItems = 10;
   const urls = imageUrls.slice(0, maxItems);
 
-  const bubbles: FlexBubble[] = urls.map((url) => ({
-    type: "bubble",
-    hero: {
-      type: "image",
-      url,
-      size: "full",
-      aspectMode: "cover",
-      aspectRatio: "1:1",
-    },
-    body: {
-      type: "box",
-      layout: "vertical",
-      spacing: "sm",
-      contents: [
-        {
-          type: "text",
-          text: "キロクマ",
-          weight: "bold",
-          size: "sm",
-          wrap: true,
-        },
-        {
-          type: "box",
-          layout: "vertical",
-          spacing: "xs",
-          contents: [
-            {
-              type: "box",
-              layout: "baseline",
-              spacing: "sm",
-              contents: [
-                {
-                  type: "text",
-                  text: "Xでシェア",
-                  size: "xs",
-                  color: "#999999",
-                  wrap: true,
-                  action: {
-                    type: "uri",
-                    label: "Xでシェア",
-                    uri: `https://x.com/intent/post?text=${encodeURIComponent("今日のキロクマです！")}&url=${encodeURIComponent(url)}`,
-                  },
-                },
-              ],
+  const bubbles: FlexBubble[] = urls.map((url, index) => {
+    const isCurrentBear = index === 0;
+    const label = isCurrentBear ? "今のクマ" : "前のクマ";
+
+    const bubble: FlexBubble = {
+      type: "bubble",
+      hero: {
+        type: "image",
+        url,
+        size: "full",
+        aspectMode: "cover",
+        aspectRatio: "1:1",
+      },
+      body: {
+        type: "box",
+        layout: "vertical",
+        spacing: "sm",
+        contents: [
+          {
+            type: "text",
+            text: label,
+            weight: "bold",
+            size: "sm",
+            wrap: true,
+          },
+        ],
+      },
+    };
+
+    // 今のクマだけシェアボタンを追加
+    if (isCurrentBear) {
+      bubble.footer = {
+        type: "box",
+        layout: "vertical",
+        spacing: "sm",
+        contents: [
+          {
+            type: "button",
+            style: "link",
+            height: "sm",
+            action: {
+              type: "uri",
+              label: "Xでシェア",
+              uri: `https://x.com/intent/post?text=${encodeURIComponent("今日のキロクマです！")}&url=${encodeURIComponent(url)}`,
             },
-          ],
-        },
-      ],
-    },
-  }));
+          },
+        ],
+      };
+    }
+
+    return bubble;
+  });
 
   const contents: FlexBubble | FlexCarousel = urls.length === 1 ?
     bubbles[0] :

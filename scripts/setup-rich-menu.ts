@@ -211,7 +211,7 @@ async function main() {
 
       case "setup":
         // 画像パスを指定（デフォルトはscripts/images/menu_2.jpg）
-        const imagePath = args[1] || path.join(__dirname, "images/menu_2.jpg");
+        const imagePath = args[1] || path.join(__dirname, "images/menu_3.png");
 
         if (!fs.existsSync(imagePath)) {
           console.error(`Image not found: ${imagePath}`);

@@ -1,7 +1,7 @@
 export {analyzeMeal, NotFoodError} from "./mealAnalyzer";
 export {generateBearImage} from "./bearGenerator";
 export {uploadImage, downloadImageAsBase64} from "./storage";
-export {saveBear, getLatestBear} from "./bearRepository";
+export {saveBear, getLatestBear, getRecentBears} from "./bearRepository";
 export {saveMeal, getRecentMeals, getMealCount} from "./mealRepository";
 export {generateVideoFromBears} from "./videoGenerator";
 export {reincarnate, getActiveGroup} from "./bearGroupRepository";

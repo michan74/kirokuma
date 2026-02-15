@@ -10,6 +10,7 @@ import {
   downloadImageAsBase64,
   saveBear,
   getLatestBear,
+  getRecentBears,
   saveMeal,
   getMealCount,
   getRecentMeals,
@@ -204,21 +205,22 @@ async function handleBearCreateEvent(event: MessageEvent): Promise<void> {
 
     // 11. くま画像を pushMessage で送信（初回と2回目以降でメッセージを変える）
     const isFirstTime = currentMealCount === 0;
-    const textMessage = {
-      type: "text" as const,
-      text: isFirstTime ?
-        "くまが生まれたよ！\nこれから一緒に食事を記録していこうね！" :
-        "うまうま！",
-    };
-    // 前のクマ画像があれば並べて表示（新しい順: 今回 → 前回）
-    const bearImageUrls = latestBear ?
-      [bearImageUrl, latestBear.imageUrl] :
-      [bearImageUrl];
-    const bearFlexMessage = buildBearFlexMessage(bearImageUrls);
 
     await lineClient.pushMessage({
       to: userId,
-      messages: [textMessage, bearFlexMessage],
+      messages: [
+        {
+          type: "text" as const,
+          text: isFirstTime ?
+            "くまが生まれたよ！\nこれから一緒に食事を記録していこうね！" :
+            "うまうま！",
+        },
+        {
+          type: "image" as const,
+          originalContentUrl: bearImageUrl,
+          previewImageUrl: bearImageUrl,
+        },
+      ],
     });
     logger.info("Sent bear image via pushMessage");
   } catch (error) {
@@ -405,6 +407,36 @@ async function handleVideoGenerationFromPostback(
       return;
     }
 
+    // クマ画像を取得
+    const bears = await getRecentBears(userId, activeGroup.id, 10);
+    if (bears.length < 2) {
+      await lineClient.replyMessage({
+        replyToken,
+        messages: [
+          {
+            type: "text",
+            text: "動画を作るには2枚以上のクマ画像が必要だよ🐻\nもう少し食事を記録してね！",
+          },
+        ],
+      });
+      return;
+    }
+
+    // 先にFlexMessageでクマ画像を送る（時間稼ぎ）
+    const bearImageUrls = bears.map((b) => b.imageUrl);
+    const flexMessage = buildBearFlexMessage(bearImageUrls, "これまでのクマたち");
+    await lineClient.replyMessage({
+      replyToken,
+      messages: [
+        {
+          type: "text",
+          text: "動画を作成中...🎬\nこれまでのクマたちを振り返ってね！",
+        },
+        flexMessage,
+      ],
+    });
+    logger.info("Sent bear flex message while generating video");
+
     // Python動画生成関数を呼び出し
     const videoGeneratorUrl =
       process.env.VIDEO_GENERATOR_URL ||
@@ -450,9 +482,9 @@ async function handleVideoGenerationFromPostback(
       thumbnailUrl: result.thumbnailUrl,
     });
 
-    // 動画をreplyMessageで送信
-    await lineClient.replyMessage({
-      replyToken,
+    // 動画をpushMessageで送信
+    await lineClient.pushMessage({
+      to: userId,
       messages: [
         {
           type: "text",
@@ -465,7 +497,7 @@ async function handleVideoGenerationFromPostback(
         },
       ],
     });
-    logger.info("Sent video via replyMessage");
+    logger.info("Sent video via pushMessage");
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     const errorStack = error instanceof Error ? error.stack : "";
@@ -474,19 +506,19 @@ async function handleVideoGenerationFromPostback(
       stack: errorStack,
     });
 
-    // エラーメッセージをreplyMessageで送信
+    // エラーメッセージをpushMessageで送信
     try {
-      await lineClient.replyMessage({
-        replyToken,
+      await lineClient.pushMessage({
+        to: userId,
         messages: [
           {
             type: "text",
-            text: `ごめんね、動画生成に失敗しちゃった🐻💦\n${errorMessage}`,
+            text: "ごめんね、動画生成に失敗しちゃった🐻💦",
           },
         ],
       });
-    } catch (replyError) {
-      logger.error("Failed to send error message via reply", {error: replyError});
+    } catch (pushError) {
+      logger.error("Failed to send error message via push", {error: pushError});
     }
   }
 }

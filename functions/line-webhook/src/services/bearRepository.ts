@@ -48,6 +48,33 @@ export async function getLatestBear(
 }
 
 /**
+ * グループ内の直近のくま画像を取得
+ */
+export async function getRecentBears(
+  userId: string,
+  groupId: string,
+  limit = 10
+): Promise<Bear[]> {
+  const snapshot = await bearsCollection
+    .where("userId", "==", userId)
+    .where("groupId", "==", groupId)
+    .orderBy("createdAt", "desc")
+    .limit(limit)
+    .get();
+
+  return snapshot.docs.map((doc) => {
+    const data = doc.data();
+    return {
+      id: doc.id,
+      userId: data.userId,
+      groupId: data.groupId,
+      imageUrl: data.imageUrl,
+      createdAt: data.createdAt.toDate(),
+    };
+  });
+}
+
+/**
  * 新しいくまを保存（自動的にアクティブグループに所属）
  */
 export async function saveBear(

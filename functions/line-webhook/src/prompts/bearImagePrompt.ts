@@ -37,16 +37,23 @@ export function buildBearImagePromptFromChanges(
   wallFloorChangePart: string
 ): string {
   return [
-    "⚠️ CRITICAL: NO FOOD, NO TEXT in image. No dishes, plates, letters, or words anywhere.",
-    "=== Bear (DRAW NEW, ignore previous bear) ===",
-    bearFeaturesPart,
-    "=== Room Changes (apply to existing room) ===",
-    "Apply the following changes to the room. Keep existing furniture and decorations.",
-    furnitureChangePart,
-    wallFloorChangePart,
+    "⚠️ CRITICAL: NO FOOD, NO TEXT in image.",
+    `=== STEP 1: Identify & Remove Previous Bear's Activity Items ===
+Look at the reference image. Find what the bear is holding or using:
+- Any handheld items
+- Any activity-related items near the bear
+→ REMOVE all these items from the scene.`,
+    `=== STEP 2: Draw New Bear ===
+Draw a completely new bear with the following:
+${bearFeaturesPart}`,
+    `=== STEP 3: Room Changes ===
+Keep existing FURNITURE (tables, chairs, shelves, rugs).
+Keep existing WALL DECORATIONS (pictures, clocks, posters).
+${furnitureChangePart}
+${wallFloorChangePart}`,
     COMPOSITION,
     STYLE,
-    "⚠️ REMINDER: NO FOOD, NO TEXT. Draw bear fresh with new outfit. Keep room frame unchanged.",
+    "⚠️ FINAL CHECK: Old activity items removed? New bear drawn? No food/text in image?",
   ].join("\n\n").trim();
 }
 
@@ -208,5 +215,7 @@ Tags: ${tags}
 === Output Format ===
 - Outfit: [outfit that matches today's mood]
 - Activity: [ONE simple activity - what does the bear want to do today?]
+- Remove from previous: [items to DELETE from the reference image - handheld items, activity items near the bear]
+- Add for this activity: [NEW items the bear needs for this activity]
 - Lighting: [lighting that matches the mood]`;
 }
