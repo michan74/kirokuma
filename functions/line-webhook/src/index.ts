@@ -5,21 +5,14 @@ import {messagingApi, WebhookEvent, MessageEvent, PostbackEvent} from "@line/bot
 import {
   analyzeMeal,
   NotFoodError,
-  generateBearImage,
-  uploadImage,
-  downloadImageAsBase64,
-  saveBear,
-  getLatestBear,
-  getRecentBears,
-  saveMeal,
-  getMealCount,
-  getRecentMeals,
   generateVideoFromBears,
-  reincarnate,
-  getActiveGroup,
-  analyzeTrends,
-  buildBearFlexMessage,
 } from "./services";
+import {
+  createBear,
+  generateVideo,
+  getBearsForVideo,
+  resetBear,
+} from "./usecases";
 
 setGlobalOptions({maxInstances: 10});
 
@@ -48,7 +41,6 @@ export const lineWebhook = onRequest(
     timeoutSeconds: 540, // 9分
   },
   async (req, res) => {
-    // LINE からのリクエストを検証（本番では署名検証を追加）
     const events: WebhookEvent[] = req.body.events;
 
     if (!events || events.length === 0) {
@@ -56,48 +48,28 @@ export const lineWebhook = onRequest(
       return;
     }
 
-    // 各イベントを処理
     for (const event of events) {
-      // Postbackイベントの処理
       if (event.type === "postback") {
         await handlePostbackEvent(event as PostbackEvent);
         continue;
       }
 
-      // メッセージイベント以外は無視
       if (event.type !== "message") {
         continue;
       }
 
-      // 型を明確にするため MessageEvent として扱う
       const msgEvent = event as MessageEvent;
 
-      // 画像メッセージの場合
       if (msgEvent.message.type === "image") {
         await handleBearCreateEvent(msgEvent);
-        continue;
       } else if (msgEvent.message.type === "text") {
-        // テキストメッセージの場合
         const text = msgEvent.message.text;
 
-        // 「動画生成」を含む場合は動画生成処理
         if (text.includes("動画生成")) {
           await handleVideoGenerationEvent(msgEvent);
-          continue;
+        } else {
+          await sendGuideMessage(msgEvent.replyToken);
         }
-
-        // その他のテキストは案内メッセージ
-        const replyToken = msgEvent.replyToken;
-        await lineClient.replyMessage({
-          replyToken,
-          messages: [
-            {
-              type: "text",
-              text: "こんにちは！🐻\n食事の写真を送ってね！\n\n「動画生成」と送ると、くまの成長動画を作るよ！",
-            },
-          ],
-        });
-        continue;
       }
     }
 
@@ -105,29 +77,33 @@ export const lineWebhook = onRequest(
   }
 );
 
-// イベント処理
+// ガイドメッセージを送信
+async function sendGuideMessage(replyToken: string): Promise<void> {
+  await lineClient.replyMessage({
+    replyToken,
+    messages: [
+      {
+        type: "text",
+        text: "こんにちは！🐻\n食事の写真を送ってね！\n\n「動画生成」と送ると、くまの成長動画を作るよ！",
+      },
+    ],
+  });
+}
+
+// クマ生成イベント処理
 async function handleBearCreateEvent(event: MessageEvent): Promise<void> {
   const replyToken = event.replyToken;
+  const userId = event.source.userId;
 
   logger.info("Image received", {messageId: event.message.id});
 
-  // ユーザーIDを取得（pushMessage用）
-  const userId = event.source.userId;
   if (!userId) {
     logger.error("userId not found in event source");
     return;
   }
 
   try {
-    // 1. 「もぐもぐ」メッセージを2秒後に返信
-    // TODO: ハッカソン提出時に復活させる（無料メッセージ数制限のため一旦コメントアウト）
-    // await lineClient.replyMessage({
-    //   replyToken,
-    //   messages: [{type: "text", text: "もぐもぐ..."}],
-    // });
-    // logger.info("Sent mogumogu message");
-
-    // 2. LINE から画像をダウンロード
+    // 1. LINE から画像をダウンロード
     const imageStream = await lineBlobClient.getMessageContent(event.message.id);
     const chunks: Buffer[] = [];
     for await (const chunk of imageStream) {
@@ -137,11 +113,8 @@ async function handleBearCreateEvent(event: MessageEvent): Promise<void> {
     const imageBase64 = imageBuffer.toString("base64");
     logger.info("Image downloaded", {size: imageBuffer.length});
 
-    // 3. 食事を分析
+    // 2. 食事を分析して中間メッセージを送信
     const mealAnalysis = await analyzeMeal(imageBase64);
-    logger.info("Meal analysis result", {mealAnalysis});
-
-    // 3.5. 中間メッセージを送信（分析完了を伝える）
     const mainDish = mealAnalysis.dish;
     await lineClient.replyMessage({
       replyToken,
@@ -154,78 +127,44 @@ async function handleBearCreateEvent(event: MessageEvent): Promise<void> {
     });
     logger.info("Sent intermediate message");
 
-    // 4. アクティブなグループを取得（なければ作成）
-    let activeGroup = await getActiveGroup(userId);
-    if (!activeGroup) {
-      // 初回ユーザー: 転生で新しいグループを作成
-      activeGroup = await reincarnate(userId);
-      logger.info("Created first group for user", {groupId: activeGroup.id});
-    }
-    const groupId = activeGroup.id;
+    // 3. クマ生成ユースケースを実行
+    const result = await createBear(imageBase64, userId);
 
-    // 5. 初回かどうかの判定用 & 過去7日分の食事履歴を取得
-    const currentMealCount = await getMealCount(userId, groupId);
-    const recentMeals = await getRecentMeals(userId, groupId);
-    const pastMealAnalyses = recentMeals.map((meal) => meal.analyzedData);
-    logger.info("Current meal count", {currentMealCount, pastMealsCount: pastMealAnalyses.length});
-
-    // 5.5. 傾向分析（料理クラスタリング + Geminiテキスト分析）
-    const dishEmbeddings = recentMeals.map((meal) => meal.dishEmbedding);
-    const trendAnalysis = await analyzeTrends(pastMealAnalyses, dishEmbeddings);
-    logger.info("Trend analysis", {trendAnalysis});
-
-    // 6. 前のクマ画像を取得（現在のグループから）
-    let previousBearImageBase64: string | undefined;
-    const latestBear = await getLatestBear(userId, groupId);
-    if (latestBear) {
-      previousBearImageBase64 = await downloadImageAsBase64(latestBear.imageUrl);
-      logger.info("Previous bear image fetched", {bearId: latestBear.id});
+    if (!result.success) {
+      if (result.errorType === "not_food") {
+        // replyTokenは使用済みなのでpushMessageで送信
+        await lineClient.pushMessage({
+          to: userId,
+          messages: [
+            {
+              type: "text",
+              text: "うまく食べ物を認識できなかったよ\n食べ物の写真を送ってね🐻🍽️",
+            },
+          ],
+        });
+      }
+      return;
     }
 
-    // 6. 過去7日分+今回の食事履歴からくま画像を生成（差分方式）
-    const allMeals = [...pastMealAnalyses, mealAnalysis];
-    const bearImageBuffer = await generateBearImage(allMeals, previousBearImageBase64, trendAnalysis);
-    logger.info("Bear image generated");
-
-    // 8. くま画像をStorageにアップロード
-    const timestamp = Date.now();
-    const bearImageUrl = await uploadImage(
-      bearImageBuffer,
-      `bears/${timestamp}.png`
-    );
-    logger.info("Bear image uploaded", {url: bearImageUrl});
-
-    // 9. くまをDBに保存
-    const savedBear = await saveBear(bearImageUrl, userId);
-    logger.info("Bear saved", {bearId: savedBear.id});
-
-    // 10. 食事をDBに保存
-    const savedMeal = await saveMeal(mealAnalysis, savedBear.id, groupId, userId);
-    logger.info("Meal saved", {mealId: savedMeal.id});
-
-    // 11. くま画像を pushMessage で送信（初回と2回目以降でメッセージを変える）
-    const isFirstTime = currentMealCount === 0;
-
+    // 4. クマ画像をpushMessageで送信
     await lineClient.pushMessage({
       to: userId,
       messages: [
         {
           type: "text" as const,
-          text: isFirstTime ?
+          text: result.isFirstTime ?
             "くまが生まれたよ！\nこれから一緒に食事を記録していこうね！" :
             "うまうま！",
         },
         {
           type: "image" as const,
-          originalContentUrl: bearImageUrl,
-          previewImageUrl: bearImageUrl,
+          originalContentUrl: result.bearImageUrl,
+          previewImageUrl: result.bearImageUrl,
         },
       ],
     });
     logger.info("Sent bear image via pushMessage");
   } catch (error) {
-    // TODO; 最終的にはpush Messageへ
-    // 食べ物以外の画像の場合
     if (error instanceof NotFoodError) {
       logger.info("Not a food image, sending error message");
       await lineClient.replyMessage({
@@ -243,20 +182,10 @@ async function handleBearCreateEvent(event: MessageEvent): Promise<void> {
     const errorMessage = error instanceof Error ? error.message : String(error);
     const errorStack = error instanceof Error ? error.stack : "";
     logger.error("Error processing image", {message: errorMessage, stack: errorStack});
-    // await lineClient.pushMessage({
-    //   to: userId,
-    //   messages: [
-    //     {
-    //       type: "text",
-    //       text: "ごめんね、エラーが起きちゃった🐻💦\nもう一度試してみてね！",
-    //     },
-    //   ],
-    // });
   }
-  return;
 }
 
-// 動画生成イベント処理
+// テキストからの動画生成イベント処理
 async function handleVideoGenerationEvent(event: MessageEvent): Promise<void> {
   const replyToken = event.replyToken;
   const userId = event.source.userId;
@@ -269,58 +198,44 @@ async function handleVideoGenerationEvent(event: MessageEvent): Promise<void> {
   logger.info("Video generation requested via LINE", {userId});
 
   try {
-    // 1. 「作成中」メッセージを返信
-    // await lineClient.replyMessage({
-    //   replyToken,
-    //   messages: [
-    //     {
-    //       type: "text",
-    //       text: "動画を作成中...🎬\nしばらくお待ちください！",
-    //     },
-    //   ],
-    // });
-    logger.info("Sent creating message");
-
-    // 2. Python動画生成関数を呼び出し
-    const videoGeneratorUrl = process.env.VIDEO_GENERATOR_URL ||
-      "https://generate-video-python-j7lkvu6b3a-uc.a.run.app";
-
-    logger.info("Calling video generator", {url: videoGeneratorUrl, userId});
-
-    const response = await fetch(videoGeneratorUrl, {
-      method: "POST",
-      headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({userId, imageCount: 10}),
-    });
-
-    logger.info("Video generator response", {status: response.status, ok: response.ok});
-
-    const resultText = await response.text();
-    logger.info("Video generator response body", {body: resultText.substring(0, 500)});
-
-    let result: {videoUrl?: string; thumbnailUrl?: string; error?: string};
-    try {
-      result = JSON.parse(resultText);
-    } catch {
-      throw new Error(`Invalid JSON response: ${resultText.substring(0, 200)}`);
+    // クマ情報を取得してFlexMessageを先に送信
+    const bearsResult = await getBearsForVideo(userId);
+    if (!bearsResult.success) {
+      await lineClient.replyMessage({
+        replyToken,
+        messages: [{type: "text", text: bearsResult.message}],
+      });
+      return;
     }
 
-    if (!response.ok || !result.videoUrl || !result.thumbnailUrl) {
-      throw new Error(result.error || `Video generation failed (status: ${response.status})`);
-    }
-
-    logger.info("Video generated", {videoUrl: result.videoUrl, thumbnailUrl: result.thumbnailUrl});
-
-    // 3. 動画をpushMessageで送信
-    // await lineClient.pushMessage({
-    // to: userId,
     await lineClient.replyMessage({
       replyToken,
       messages: [
         {
           type: "text",
-          text: "くまの成長動画ができたよ！🐻🎬",
+          text: "動画を作成中...🎬\nこれまでのクマたちを振り返ってね！",
         },
+        bearsResult.flexMessage,
+      ],
+    });
+    logger.info("Sent bear flex message while generating video");
+
+    // 動画生成ユースケースを実行
+    const result = await generateVideo(userId);
+
+    if (!result.success) {
+      await lineClient.pushMessage({
+        to: userId,
+        messages: [{type: "text", text: `ごめんね、動画生成に失敗しちゃった🐻💦\n${result.message}`}],
+      });
+      return;
+    }
+
+    // 動画をpushMessageで送信
+    await lineClient.pushMessage({
+      to: userId,
+      messages: [
+        {type: "text", text: "くまの成長動画ができたよ！🐻🎬"},
         {
           type: "video",
           originalContentUrl: result.videoUrl,
@@ -334,16 +249,10 @@ async function handleVideoGenerationEvent(event: MessageEvent): Promise<void> {
     const errorStack = error instanceof Error ? error.stack : "";
     logger.error("Error generating video", {message: errorMessage, stack: errorStack});
 
-    // エラーメッセージをpushMessageで送信
     try {
       await lineClient.pushMessage({
         to: userId,
-        messages: [
-          {
-            type: "text",
-            text: `ごめんね、動画生成に失敗しちゃった🐻💦\n${errorMessage}`,
-          },
-        ],
+        messages: [{type: "text", text: `ごめんね、動画生成に失敗しちゃった🐻💦\n${errorMessage}`}],
       });
     } catch (pushError) {
       logger.error("Failed to send error message", {error: pushError});
@@ -364,18 +273,15 @@ async function handlePostbackEvent(event: PostbackEvent): Promise<void> {
 
   logger.info("Postback received", {userId, data});
 
-  // クエリパラメータをパース
   const params = new URLSearchParams(data);
   const action = params.get("action");
 
   switch (action) {
   case "generate_video":
-    // 動画生成処理
     await handleVideoGenerationFromPostback(userId, replyToken);
     break;
 
   case "reset":
-    // リセット（転生）処理
     await handleResetFromPostback(userId, replyToken);
     break;
 
@@ -392,39 +298,16 @@ async function handleVideoGenerationFromPostback(
   logger.info("Video generation requested via postback", {userId});
 
   try {
-    // アクティブなグループを取得
-    const activeGroup = await getActiveGroup(userId);
-    if (!activeGroup) {
+    // クマ情報を取得してFlexMessageを先に送信
+    const bearsResult = await getBearsForVideo(userId);
+    if (!bearsResult.success) {
       await lineClient.replyMessage({
         replyToken,
-        messages: [
-          {
-            type: "text",
-            text: "まだ食事の記録がないよ🐻\nまずは食事の写真を送ってね！",
-          },
-        ],
+        messages: [{type: "text", text: bearsResult.message}],
       });
       return;
     }
 
-    // クマ画像を取得
-    const bears = await getRecentBears(userId, activeGroup.id, 10);
-    if (bears.length < 2) {
-      await lineClient.replyMessage({
-        replyToken,
-        messages: [
-          {
-            type: "text",
-            text: "動画を作るには2枚以上のクマ画像が必要だよ🐻\nもう少し食事を記録してね！",
-          },
-        ],
-      });
-      return;
-    }
-
-    // 先にFlexMessageでクマ画像を送る（時間稼ぎ）
-    const bearImageUrls = bears.map((b) => b.imageUrl);
-    const flexMessage = buildBearFlexMessage(bearImageUrls, "これまでのクマたち");
     await lineClient.replyMessage({
       replyToken,
       messages: [
@@ -432,64 +315,26 @@ async function handleVideoGenerationFromPostback(
           type: "text",
           text: "動画を作成中...🎬\nこれまでのクマたちを振り返ってね！",
         },
-        flexMessage,
+        bearsResult.flexMessage,
       ],
     });
     logger.info("Sent bear flex message while generating video");
 
-    // Python動画生成関数を呼び出し
-    const videoGeneratorUrl =
-      process.env.VIDEO_GENERATOR_URL ||
-      "https://generate-video-python-j7lkvu6b3a-uc.a.run.app";
+    // 動画生成ユースケースを実行
+    const result = await generateVideo(userId);
 
-    logger.info("Calling video generator", {
-      url: videoGeneratorUrl,
-      userId,
-      groupId: activeGroup.id,
-    });
-
-    const response = await fetch(videoGeneratorUrl, {
-      method: "POST",
-      headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({userId, groupId: activeGroup.id, imageCount: 10}),
-    });
-
-    logger.info("Video generator response", {
-      status: response.status,
-      ok: response.ok,
-    });
-
-    const resultText = await response.text();
-    logger.info("Video generator response body", {
-      body: resultText.substring(0, 500),
-    });
-
-    let result: {videoUrl?: string; thumbnailUrl?: string; error?: string};
-    try {
-      result = JSON.parse(resultText);
-    } catch {
-      throw new Error(`Invalid JSON response: ${resultText.substring(0, 200)}`);
+    if (!result.success) {
+      await lineClient.pushMessage({
+        to: userId,
+        messages: [{type: "text", text: "ごめんね、動画生成に失敗しちゃった🐻💦"}],
+      });
+      return;
     }
 
-    if (!response.ok || !result.videoUrl || !result.thumbnailUrl) {
-      throw new Error(
-        result.error || `Video generation failed (status: ${response.status})`
-      );
-    }
-
-    logger.info("Video generated", {
-      videoUrl: result.videoUrl,
-      thumbnailUrl: result.thumbnailUrl,
-    });
-
-    // 動画をpushMessageで送信
     await lineClient.pushMessage({
       to: userId,
       messages: [
-        {
-          type: "text",
-          text: "くまの成長動画ができたよ！🐻🎬",
-        },
+        {type: "text", text: "くまの成長動画ができたよ！🐻🎬"},
         {
           type: "video",
           originalContentUrl: result.videoUrl,
@@ -506,16 +351,10 @@ async function handleVideoGenerationFromPostback(
       stack: errorStack,
     });
 
-    // エラーメッセージをpushMessageで送信
     try {
       await lineClient.pushMessage({
         to: userId,
-        messages: [
-          {
-            type: "text",
-            text: "ごめんね、動画生成に失敗しちゃった🐻💦",
-          },
-        ],
+        messages: [{type: "text", text: "ごめんね、動画生成に失敗しちゃった🐻💦"}],
       });
     } catch (pushError) {
       logger.error("Failed to send error message via push", {error: pushError});
@@ -523,16 +362,22 @@ async function handleVideoGenerationFromPostback(
   }
 }
 
-// Postbackからのリセット（転生）処理
+// Postbackからのリセット処理
 async function handleResetFromPostback(
   userId: string,
   replyToken: string
 ): Promise<void> {
   logger.info("Reset requested via postback", {userId});
 
-  // 転生処理: 現在のグループを終了し、新しいグループを作成
-  const newGroup = await reincarnate(userId);
-  logger.info("Reincarnation complete", {userId, newGroupId: newGroup.id});
+  const result = await resetBear(userId);
+
+  if (!result.success) {
+    await lineClient.replyMessage({
+      replyToken,
+      messages: [{type: "text", text: "ごめんね、リセットに失敗しちゃった🐻💦"}],
+    });
+    return;
+  }
 
   await lineClient.replyMessage({
     replyToken,
@@ -546,10 +391,10 @@ async function handleResetFromPostback(
 }
 
 // 動画生成エンドポイント（メモリ・タイムアウト増量）
-export const generateVideo = onRequest(
+export const generateVideoEndpoint = onRequest(
   {
     memory: "2GiB",
-    timeoutSeconds: 540, // 9分
+    timeoutSeconds: 540,
     minInstances: 0,
   },
   async (req, res) => {
@@ -581,7 +426,6 @@ export const generateVideo = onRequest(
       const bearImageUrls = bearsSnapshot.docs.map((doc) => doc.data().imageUrl);
       logger.info("Bear images fetched", {count: bearImageUrls.length});
 
-      // 動画生成
       const videoUrl = await generateVideoFromBears(bearImageUrls, userId);
       logger.info("Video generated successfully", {videoUrl});
 
