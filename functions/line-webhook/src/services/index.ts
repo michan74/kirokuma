@@ -11,4 +11,7 @@ export {
   cosineSimilarity,
   detectTrendStrength,
   averageEmbedding,
+  clusterDishes,
 } from "./embeddingService";
+export {buildBearFlexMessage} from "./lineMessage";
+export {analyzeTrends} from "./trendAnalyzer";

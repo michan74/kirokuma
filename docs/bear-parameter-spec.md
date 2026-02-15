@@ -65,8 +65,8 @@
 |-----------|-----|------|
 | id | string | ドキュメントID |
 | userId | string | ユーザーID |
+| groupId | string | 所属するグループID |
 | bearId | string | 紐づくクマID |
-| imageUrl | string | 食事画像URL |
 | analyzedData | MealAnalysis | 分析結果 |
 | tagsEmbedding | number[] | タグのEmbedding |
 | dishesEmbedding | number[] | 料理名のEmbedding |
@@ -87,16 +87,52 @@
 
 ### 類似度計算
 
-```typescript
-// コサイン類似度
-cosineSimilarity(vectorA, vectorB) → 0.0 ~ 1.0
+全ペアのコサイン類似度を計算し、高類似度（0.8以上）のペアの割合から傾向を判定:
+- **strong**: 60%以上のペアが高類似度
+- **medium**: 30%以上
+- **weak**: それ以下
 
-// 傾向の強さを検出
-detectTrendStrength(embeddings[], threshold) → "strong" | "medium" | "weak"
-// - strong: 60%以上のペアが高類似度
-// - medium: 30%以上
-// - weak: それ以下
-```
+---
+
+## トレンド分析
+
+### TrendAnalysis（傾向分析結果）
+
+過去7日分の食事Embeddingから、3つの観点で「偏り」を検出する。
+
+| フィールド | 型 | 説明 |
+|-----------|-----|------|
+| tags | "strong" \| "medium" \| "weak" | 雰囲気の傾向（ほっこり系が続く等） |
+| dishes | "strong" \| "medium" \| "weak" | 料理ジャンルの傾向（和食が続く等） |
+| ingredients | "strong" \| "medium" \| "weak" | 食材の傾向（きのこ多め等） |
+
+### 総合傾向の判定
+
+3つの傾向から総合的な強さを判定（壁/床変更に使用）:
+
+| 条件 | 総合傾向 |
+|-----|---------|
+| 2つ以上が strong | STRONG |
+| 1つが strong、または2つ以上が medium | MEDIUM |
+| それ以外 | WEAK |
+
+### プロンプトへの反映
+
+#### 家具変更
+
+| 傾向 | 家具デザイン |
+|-----|-------------|
+| STRONG | 大胆なテーマ家具（きのこスツール、水槽等） |
+| MEDIUM | 控えめなテーマアクセント（色・パターン） |
+| WEAK | ニュートラル、テーマを強制しない |
+
+#### 壁/床変更
+
+| 総合傾向 | 変更範囲 |
+|---------|---------|
+| STRONG | 壁紙AND床の両方を変更 |
+| MEDIUM | 壁紙OR床のどちらかを変更 |
+| WEAK | 壁の装飾のみ変更（時計、絵等） |
 
 ---
 
@@ -193,8 +229,8 @@ CRITICAL: Bear should NOT be eating or cooking. Choose ONE simple activity.
 
 ---
 
-## 今後の拡張予定
+## 実装済み
 
-- [ ] Embeddingを活用した類似度ベースの傾向検出
-- [ ] 傾向の強さに応じた家具/壁/床の変更ロジック
-- [ ] 食材モチーフの家具生成（きのこランプ等）
+- [x] Embeddingを活用した類似度ベースの傾向検出
+- [x] 傾向の強さに応じた家具/壁/床の変更ロジック
+- [x] 食材モチーフの家具生成（きのこランプ等）

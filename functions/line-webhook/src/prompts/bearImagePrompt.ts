@@ -1,4 +1,4 @@
-import {MealAnalysis} from "../models";
+import {MealAnalysis, TrendAnalysis} from "../models";
 
 // 構図
 const COMPOSITION = `
@@ -54,7 +54,7 @@ export function buildBearImagePromptFromChanges(
  * 過去7日分の食事履歴から家具の変更を決定
  * 累積の傾向を見て、小物→家具→大きい家具と成長
  */
-export function buildFurnitureChangePrompt(meals: MealAnalysis[]): string {
+export function buildFurnitureChangePrompt(meals: MealAnalysis[], trendAnalysis?: TrendAnalysis): string {
   const mealHistory = meals.map((m, i) => {
     const ingredients = (m.ingredients ?? []).join(", ");
     const tags = (m.tags ?? []).join(", ");
@@ -62,12 +62,33 @@ export function buildFurnitureChangePrompt(meals: MealAnalysis[]): string {
     return `${isToday ? "[TODAY] " : ""}${m.dish ?? "食事"} (${ingredients}) [${tags}]`;
   }).join("\n");
 
+  // 傾向の強さに応じた指示
+  let trendGuidance = "";
+  if (trendAnalysis) {
+    const dishStrength = trendAnalysis.dishes.strength.toUpperCase();
+    const trendDishes = trendAnalysis.dishes.trendDishes.join(", ") || "なし";
+    const moodTrend = trendAnalysis.textTrends.moodTrend;
+    const ingredientTrend = trendAnalysis.textTrends.ingredientTrend;
+
+    trendGuidance = `
+=== Detected Trends (from AI analysis) ===
+- Dish genre: ${dishStrength} (${trendDishes})
+- Mood/atmosphere: ${moodTrend}
+- Ingredients: ${ingredientTrend}
+
+Use these trends to guide your design:
+- STRONG trend → Bold themed furniture (mushroom stool, fish tank, etc.)
+- MEDIUM trend → Subtle themed accents (matching colors, patterns)
+- WEAK trend → Keep neutral, don't force a theme
+`;
+  }
+
   return `You are a room designer for a cute miniature diorama.
 Based on the 7-day meal history, decide what furniture to ADD or REPLACE.
 
 === Meal History (7 days, oldest to newest) ===
 ${mealHistory}
-
+${trendGuidance}
 === Design Philosophy ===
 - Look at ALL 7 days - find repeated ingredients or tags
 - Repeated items = stronger influence on furniture style!
@@ -98,9 +119,10 @@ Based on the CUMULATIVE meal history:
 
 /**
  * 過去7日分の食事履歴から壁/床の変更を決定
- * 壁紙・床は傾向が大きく変わった時だけ変更
+ * 壁紙・床は部屋の雰囲気を大きく変えるため、慎重に変更
+ * 優先順位: mood（雰囲気） > dishes（料理ジャンル） > ingredients（食材）
  */
-export function buildWallFloorChangePrompt(meals: MealAnalysis[]): string {
+export function buildWallFloorChangePrompt(meals: MealAnalysis[], trendAnalysis?: TrendAnalysis): string {
   const mealHistory = meals.map((m, i) => {
     const ingredients = (m.ingredients ?? []).join(", ");
     const tags = (m.tags ?? []).join(", ");
@@ -108,35 +130,59 @@ export function buildWallFloorChangePrompt(meals: MealAnalysis[]): string {
     return `${isToday ? "[TODAY] " : ""}${m.dish ?? "食事"} (${ingredients}) [${tags}]`;
   }).join("\n");
 
+  // 傾向の強さに基づく変更ルール
+  const dishStrength = trendAnalysis?.dishes.strength ?? "weak";
+  const overallTrend = dishStrength.toUpperCase() as "STRONG" | "MEDIUM" | "WEAK";
+
+  const changeInstruction = {
+    STRONG: "STRONG trend detected → Change BOTH wallpaper AND floor to match the theme!",
+    MEDIUM: "MEDIUM trend detected → Change wallpaper OR floor (pick one)",
+    WEAK: "WEAK trend detected → Only change wall decor (clock, picture, shelf)",
+  }[overallTrend];
+
+  // 傾向の詳細
+  let trendDetails = "";
+  if (trendAnalysis) {
+    const trendDishes = trendAnalysis.dishes.trendDishes.join(", ") || "なし";
+    const moodTrend = trendAnalysis.textTrends.moodTrend;
+    const ingredientTrend = trendAnalysis.textTrends.ingredientTrend;
+
+    trendDetails = `
+=== Detected Trends ===
+- Dish genre: ${dishStrength.toUpperCase()} (${trendDishes})
+- Mood/atmosphere: ${moodTrend} ← PRIMARY influence on wall/floor
+- Ingredients: ${ingredientTrend} ← Only use if dish trend is STRONG
+`;
+  }
+
   return `You are a room designer for a cute miniature diorama.
 Based on the 7-day meal history, decide what wall/floor to CHANGE.
 
 === Meal History (7 days, oldest to newest) ===
 ${mealHistory}
+${trendDetails}
+=== Overall Trend: ${overallTrend} ===
+${changeInstruction}
 
-=== Design Philosophy ===
-- Look at ALL 7 days - find repeated ingredients or tags
-- Repeated items = stronger influence on wall/floor style!
-  - Example: "fish" appears often → ocean-themed wallpaper, sandy floor
-  - Example: "cozy" tag repeated → warm colors, soft textures
-- Be creative! Like Animal Crossing room themes
+=== IMPORTANT: Design Priority ===
+1. FIRST: Use mood/atmosphere (cozy → warm colors, elegant → refined textures)
+2. SECOND: Use dish genre (Japanese → natural wood, Italian → terracotta)
+3. LAST: Use ingredient motifs ONLY if dish trend is STRONG
+   - GOOD: abstract patterns, colors, textures
+   - BAD: literal pictures of food
 
 === Elements to Change ===
-- Wallpaper: pattern, color, theme (can be playful!)
+- Wallpaper: pattern, color, texture (based on mood first!)
 - Floor: material, color, pattern
 - Wall decor: clock, picture, shelf, window, poster
 
-=== Change Rules (based on trend strength) ===
-- STRONG trend (same tags/ingredients appear 4+ times): Change wallpaper AND floor
-- MEDIUM trend (same tags/ingredients appear 2-3 times): Change wallpaper OR floor
-- WEAK trend (no clear pattern): Only change wall decor (clock, picture, shelf)
-
 === Output Format ===
-Pick 1-2 changes inspired by the meal history:
-- Wallpaper: [new style reflecting dominant ingredients/tags]
-- Floor: [new style reflecting dominant ingredients/tags]
+Based on the ${overallTrend} trend, pick changes:
+- Wallpaper: [style based on mood/genre, NOT direct food imagery]
+- Floor: [style based on mood/genre]
 - Wall decor: [add or replace item]`;
 }
+
 
 /**
  * 今回の食事からクマの服装/活動を決定
@@ -153,15 +199,14 @@ ${meal.dish} (${ingredients})
 Tags: ${tags}
 
 === Think about ===
-- What mood does this meal give? (energetic, relaxed, cozy, playful, creative...)
-- What activity fits that mood? (anything the bear can do in a small room)
+- What mood does this meal give?
+- What activity fits that mood?
 
 ⚠️ CRITICAL: Bear should NOT be eating or cooking. Choose ONE simple activity.
 ⚠️ DO NOT mention food names in output.
 
 === Output Format ===
-- Outfit: [casual outfit that matches today's mood]
+- Outfit: [outfit that matches today's mood]
 - Activity: [ONE simple activity - what does the bear want to do today?]
-- Expression: [facial expression]
 - Lighting: [lighting that matches the mood]`;
 }

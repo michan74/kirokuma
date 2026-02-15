@@ -1,4 +1,36 @@
 /**
+ * 料理クラスタリング結果
+ */
+export interface DishClusterResult {
+  /** 最大クラスターの料理名リスト */
+  trendDishes: string[];
+  /** 傾向の強さ */
+  strength: "strong" | "medium" | "weak";
+  /** クラスター数 */
+  clusterCount: number;
+}
+
+/**
+ * タグ・食材の傾向（Gemini分析結果）
+ */
+export interface TextTrendResult {
+  /** 雰囲気の傾向 */
+  moodTrend: string;
+  /** 食材の傾向 */
+  ingredientTrend: string;
+}
+
+/**
+ * 総合的な傾向分析結果
+ */
+export interface TrendAnalysis {
+  /** 料理ジャンルの傾向（クラスタリング結果） */
+  dishes: DishClusterResult;
+  /** タグ・食材の傾向（Gemini分析） */
+  textTrends: TextTrendResult;
+}
+
+/**
  * 食事分析結果
  * Gemini が食事画像から抽出する情報
  */
@@ -91,13 +123,8 @@ export interface Meal {
   userId: string;
   groupId: string; // 所属するグループ
   bearId: string;
-  imageUrl: string;
   analyzedData: MealAnalysis;
-  /** タグのEmbedding（雰囲気: ほっこり、おしゃれ等） */
-  tagsEmbedding?: number[];
-  /** 料理名のEmbedding（ジャンル: 味噌汁、パスタ等） */
-  dishesEmbedding?: number[];
-  /** 食材のEmbedding（モチーフ: きのこ、鮭等） */
-  ingredientsEmbedding?: number[];
+  /** 料理名のEmbedding（クラスタリング用） */
+  dishEmbedding?: number[];
   createdAt: Date;
 }

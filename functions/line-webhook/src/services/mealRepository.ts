@@ -1,15 +1,14 @@
 import * as admin from "firebase-admin";
 import {Meal, MealAnalysis} from "../models";
-import {getTagsEmbedding} from "./embeddingService";
+import {getEmbedding} from "./embeddingService";
 
 const db = admin.firestore();
 const mealsCollection = db.collection("meals");
 
 /**
- * 食事分析結果を保存（タグのEmbeddingも計算して保存）
+ * 食事分析結果を保存（料理名のEmbeddingも計算して保存）
  */
 export async function saveMeal(
-  imageUrl: string,
   analyzedData: MealAnalysis,
   bearId: string,
   groupId: string,
@@ -17,25 +16,15 @@ export async function saveMeal(
 ): Promise<Meal> {
   const now = admin.firestore.Timestamp.now();
 
-  // 3つに分けてEmbedding化
-  const dishNames = [analyzedData.dish];
-  const ingredients = analyzedData.ingredients;
-
-  const [tagsEmbedding, dishesEmbedding, ingredientsEmbedding] = await Promise.all([
-    getTagsEmbedding(analyzedData.tags),
-    getTagsEmbedding(dishNames),
-    getTagsEmbedding(ingredients),
-  ]);
+  // 料理名だけEmbedding化（クラスタリング用）
+  const dishEmbedding = await getEmbedding(analyzedData.dish);
 
   const docRef = await mealsCollection.add({
     userId,
     groupId,
     bearId,
-    imageUrl,
     analyzedData,
-    tagsEmbedding,
-    dishesEmbedding,
-    ingredientsEmbedding,
+    dishEmbedding,
     createdAt: now,
   });
 
@@ -44,11 +33,8 @@ export async function saveMeal(
     userId,
     groupId,
     bearId,
-    imageUrl,
     analyzedData,
-    tagsEmbedding,
-    dishesEmbedding,
-    ingredientsEmbedding,
+    dishEmbedding,
     createdAt: now.toDate(),
   };
 }
@@ -79,11 +65,8 @@ export async function getRecentMeals(
       userId: data.userId,
       groupId: data.groupId,
       bearId: data.bearId,
-      imageUrl: data.imageUrl,
       analyzedData: data.analyzedData as MealAnalysis,
-      tagsEmbedding: data.tagsEmbedding as number[] | undefined,
-      dishesEmbedding: data.dishesEmbedding as number[] | undefined,
-      ingredientsEmbedding: data.ingredientsEmbedding as number[] | undefined,
+      dishEmbedding: data.dishEmbedding as number[] | undefined,
       createdAt: data.createdAt.toDate(),
     };
   });

@@ -2,7 +2,7 @@ import {GoogleGenAI} from "@google/genai";
 import * as fs from "fs";
 import * as path from "path";
 import * as logger from "firebase-functions/logger";
-import {MealAnalysis} from "../models";
+import {MealAnalysis, TrendAnalysis} from "../models";
 import {
   buildBearImagePromptFromChanges,
   buildFurnitureChangePrompt,
@@ -37,10 +37,12 @@ function loadEmptyRoomImage(): string {
  * 過去7日分の食事履歴から差分でくま画像を生成（参照画像あり）
  * @param meals 過去7日分の食事履歴（今回の食事を含む）
  * @param referenceImageBase64 参照画像（Base64）- 初期は空の部屋、以降は前のクマ画像
+ * @param trendAnalysis 傾向分析結果（Embeddingベースの偏り検出）
  */
 async function generateImageFromMeals(
   meals: MealAnalysis[],
-  referenceImageBase64: string
+  referenceImageBase64: string,
+  trendAnalysis?: TrendAnalysis
 ): Promise<Buffer> {
   // Generate detailed prompt parts via text AI
   async function generateDetailFromAI(instruction: string, temperature?: number): Promise<string> {
@@ -63,9 +65,9 @@ async function generateImageFromMeals(
   const todaysMeal = meals[meals.length - 1];
 
   // Generate change prompts
-  // 家具と壁/床は過去7日分の累積を見る
-  const furnitureInstruction = buildFurnitureChangePrompt(meals);
-  const wallFloorInstruction = buildWallFloorChangePrompt(meals);
+  // 家具と壁/床は過去7日分の累積を見る（傾向分析結果も渡す）
+  const furnitureInstruction = buildFurnitureChangePrompt(meals, trendAnalysis);
+  const wallFloorInstruction = buildWallFloorChangePrompt(meals, trendAnalysis);
   // クマは今日の食事だけで決める
   const bearFeaturesInstruction = buildBearFeaturesPromptFromMeal(todaysMeal);
 
@@ -125,10 +127,12 @@ async function generateImageFromMeals(
  * 過去7日分の食事履歴からくま画像を生成する（差分方式）
  * @param meals 過去7日分の食事履歴（今回の食事を含む）
  * @param previousBearImageBase64 前のクマ画像（Base64）- 初回はundefined
+ * @param trendAnalysis 傾向分析結果（Embeddingベースの偏り検出）
  */
 export async function generateBearImage(
   meals: MealAnalysis[],
-  previousBearImageBase64?: string
+  previousBearImageBase64?: string,
+  trendAnalysis?: TrendAnalysis
 ): Promise<Buffer> {
   // 参照画像を決定: 前のクマ画像があればそれを使う、なければ空の部屋画像
   const referenceImage = previousBearImageBase64 || loadEmptyRoomImage();
@@ -137,7 +141,7 @@ export async function generateBearImage(
   });
 
   // 過去7日分の食事履歴から差分で画像を生成
-  return generateImageFromMeals(meals, referenceImage);
+  return generateImageFromMeals(meals, referenceImage, trendAnalysis);
 }
 
 /**

@@ -16,6 +16,8 @@ import {
   generateVideoFromBears,
   reincarnate,
   getActiveGroup,
+  analyzeTrends,
+  buildBearFlexMessage,
 } from "./services";
 
 setGlobalOptions({maxInstances: 10});
@@ -166,6 +168,11 @@ async function handleBearCreateEvent(event: MessageEvent): Promise<void> {
     const pastMealAnalyses = recentMeals.map((meal) => meal.analyzedData);
     logger.info("Current meal count", {currentMealCount, pastMealsCount: pastMealAnalyses.length});
 
+    // 5.5. 傾向分析（料理クラスタリング + Geminiテキスト分析）
+    const dishEmbeddings = recentMeals.map((meal) => meal.dishEmbedding);
+    const trendAnalysis = await analyzeTrends(pastMealAnalyses, dishEmbeddings);
+    logger.info("Trend analysis", {trendAnalysis});
+
     // 6. 前のクマ画像を取得（現在のグループから）
     let previousBearImageBase64: string | undefined;
     const latestBear = await getLatestBear(userId, groupId);
@@ -176,7 +183,7 @@ async function handleBearCreateEvent(event: MessageEvent): Promise<void> {
 
     // 6. 過去7日分+今回の食事履歴からくま画像を生成（差分方式）
     const allMeals = [...pastMealAnalyses, mealAnalysis];
-    const bearImageBuffer = await generateBearImage(allMeals, previousBearImageBase64);
+    const bearImageBuffer = await generateBearImage(allMeals, previousBearImageBase64, trendAnalysis);
     logger.info("Bear image generated");
 
     // 8. くま画像をStorageにアップロード
@@ -192,38 +199,26 @@ async function handleBearCreateEvent(event: MessageEvent): Promise<void> {
     logger.info("Bear saved", {bearId: savedBear.id});
 
     // 10. 食事をDBに保存
-    const savedMeal = await saveMeal(imageBase64, mealAnalysis, savedBear.id, groupId, userId);
+    const savedMeal = await saveMeal(mealAnalysis, savedBear.id, groupId, userId);
     logger.info("Meal saved", {mealId: savedMeal.id});
 
     // 11. くま画像を pushMessage で送信（初回と2回目以降でメッセージを変える）
     const isFirstTime = currentMealCount === 0;
-    const messages = isFirstTime ?
-      [
-        {
-          type: "text" as const,
-          text: "くまが生まれたよ！\nこれから一緒に食事を記録していこうね！",
-        },
-        {
-          type: "image" as const,
-          originalContentUrl: bearImageUrl,
-          previewImageUrl: bearImageUrl,
-        },
-      ] :
-      [
-        {
-          type: "text" as const,
-          text: "うまうま！",
-        },
-        {
-          type: "image" as const,
-          originalContentUrl: bearImageUrl,
-          previewImageUrl: bearImageUrl,
-        },
-      ];
+    const textMessage = {
+      type: "text" as const,
+      text: isFirstTime ?
+        "くまが生まれたよ！\nこれから一緒に食事を記録していこうね！" :
+        "うまうま！",
+    };
+    // 前のクマ画像があれば並べて表示（新しい順: 今回 → 前回）
+    const bearImageUrls = latestBear ?
+      [bearImageUrl, latestBear.imageUrl] :
+      [bearImageUrl];
+    const bearFlexMessage = buildBearFlexMessage(bearImageUrls);
 
     await lineClient.pushMessage({
       to: userId,
-      messages,
+      messages: [textMessage, bearFlexMessage],
     });
     logger.info("Sent bear image via pushMessage");
   } catch (error) {
