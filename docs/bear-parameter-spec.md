@@ -9,34 +9,162 @@
 
 ## アーキテクチャ
 
+### 食事記録フロー
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant L as LINE
+    participant W as Webhook
+    participant G as Gemini
+    participant E as Embedding API
+    participant F as Firestore
+    participant S as Storage
+
+    U->>L: 食事画像を送信
+    L->>W: Webhook (image)
+    W->>L: 画像ダウンロード
+
+    Note over W,G: 1. 食事分析
+    W->>G: analyzeMeal<br/>(Gemini 2.0 Flash)
+    G-->>W: MealAnalysis<br/>{dish, ingredients, tags}
+
+    W->>L: 中間メッセージ<br/>"もぐもぐ...{dish}、おいしいな"
+
+    Note over W,F: 2. 履歴取得
+    W->>F: 過去7日分の食事取得
+    F-->>W: Meal[] + dishEmbeddings
+
+    Note over W,G: 3. 傾向分析（並列処理）
+    par 料理クラスタリング
+        W->>W: clusterDishes<br/>(コサイン類似度計算)
+    and テキスト傾向分析
+        W->>G: analyzeTextTrends<br/>(Gemini 2.0 Flash)
+        G-->>W: {moodTrend, ingredientTrend}
+    end
+    Note over W: TrendAnalysis完成
+
+    W->>F: 前のクマ画像取得
+    F-->>W: 最新Bear
+    W->>S: クマ画像ダウンロード
+
+    Note over W,G: 4. プロンプト生成（3並列）
+    par 家具変更
+        W->>G: buildFurnitureChangePrompt<br/>(Gemini 2.5 Pro)
+        G-->>W: furnitureChangePart
+    and 壁/床変更
+        W->>G: buildWallFloorChangePrompt<br/>(Gemini 2.5 Pro)
+        G-->>W: wallFloorChangePart
+    and クマの特徴
+        W->>G: buildBearFeaturesPrompt<br/>(Gemini 2.5 Pro)
+        G-->>W: bearFeaturesPart
+    end
+
+    Note over W,G: 5. クマ画像生成
+    W->>G: generateBearImage<br/>(Gemini 2.5 Flash Image)<br/>参照画像 + プロンプト
+    G-->>W: 新しいクマ画像
+
+    Note over W,E: 6. Embedding生成
+    W->>E: getEmbedding(dish)<br/>(text-embedding-004)
+    E-->>W: dishEmbedding
+
+    Note over W,S: 7. 保存
+    W->>S: 食事画像アップロード
+    W->>S: クマ画像アップロード
+    W->>F: Bear保存
+    W->>F: Meal保存<br/>(bearId, dishEmbedding)
+
+    W->>L: pushMessage
+    L->>U: クマ画像を送信
 ```
-┌─────────────────────────────────────────────────────────────┐
-│  食事画像                                                     │
-└─────────────────────────────────────────────────────────────┘
-            ↓ Gemini 2.0 Flash
-┌─────────────────────────────────────────────────────────────┐
-│  MealAnalysis                                                │
-│  - dishes: 料理リスト（名前、カテゴリ、食材、量）              │
-│  - tags: 雰囲気タグ（3-5個）                                  │
-└─────────────────────────────────────────────────────────────┘
-            ↓ Embedding API (text-embedding-004)
-┌─────────────────────────────────────────────────────────────┐
-│  3つのEmbeddingベクトル                                       │
-│  - tagsEmbedding: 雰囲気（ほっこり、おしゃれ等）              │
-│  - dishesEmbedding: 料理ジャンル（味噌汁、パスタ等）          │
-│  - ingredientsEmbedding: 食材（きのこ、鮭等）                 │
-└─────────────────────────────────────────────────────────────┘
-            ↓ Firestore保存
-┌─────────────────────────────────────────────────────────────┐
-│  過去7日分の MealAnalysis + Embeddings                       │
-└─────────────────────────────────────────────────────────────┘
-            ↓ 類似度計算 & プロンプト生成
-┌─────────────────────────────────────────────────────────────┐
-│  画像生成 (Gemini 2.5 Flash Image)                           │
-│  - 前のクマ画像を参照（差分方式）                             │
-│  - 部屋: 累積履歴から変更                                     │
-│  - クマ: 今日の食事から新規描画                               │
-└─────────────────────────────────────────────────────────────┘
+
+### AI処理の詳細
+
+| ステップ | 処理 | モデル | 入力 | 出力 |
+|---------|------|--------|------|------|
+| 1 | 食事分析 | Gemini 2.0 Flash | 食事画像 | MealAnalysis (dish, ingredients, tags) |
+| 3a | 料理クラスタリング | - (計算処理) | dishEmbeddings | DishClusterResult (trendDishes, strength) |
+| 3b | テキスト傾向分析 | Gemini 2.0 Flash | tags[], ingredients[] | TextTrendResult (moodTrend, ingredientTrend) |
+| 4a | 家具変更プロンプト | Gemini 2.5 Pro | meals[], TrendAnalysis | 家具追加/変更の指示文 |
+| 4b | 壁/床変更プロンプト | Gemini 2.5 Pro | meals[], TrendAnalysis | 壁紙/床/装飾の変更指示文 |
+| 4c | クマの特徴プロンプト | Gemini 2.5 Pro | todaysMeal | outfit, activity, expression, lighting |
+| 5 | クマ画像生成 | Gemini 2.5 Flash Image | 参照画像 + プロンプト | クマ画像 (PNG) |
+| 6 | Embedding生成 | text-embedding-004 | dish (料理名) | dishEmbedding (768次元) |
+
+### 動画生成フロー
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant L as LINE
+    participant W as Webhook
+    participant F as Firestore
+    participant P as Python Video Generator
+
+    U->>L: "動画生成"
+    L->>W: Webhook (text)
+
+    W->>F: アクティブグループ取得
+    F-->>W: BearGroup
+
+    W->>F: クマと食事を取得<br/>(getRecentBearsWithMeals)
+    F-->>W: Bear + Meal (最大30件)
+
+    Note over W: FlexMessageカルーセル作成<br/>上: クマ画像<br/>下: 食事画像
+
+    W->>L: replyMessage
+    L->>U: "動画を作成中..."<br/>+ カルーセル表示
+
+    W->>P: 動画生成リクエスト
+    P-->>W: videoUrl, thumbnailUrl
+
+    W->>L: pushMessage
+    L->>U: 動画を送信
+```
+
+### データフロー概要
+
+```mermaid
+flowchart TB
+    subgraph Input
+        A[食事画像]
+    end
+
+    subgraph Analysis
+        B[Gemini 2.0 Flash<br/>食事分析]
+        C[MealAnalysis<br/>dish, ingredients, tags]
+        D[Embedding API<br/>dishEmbedding]
+    end
+
+    subgraph Storage
+        E[(Firestore<br/>meals)]
+        F[(Firestore<br/>bears)]
+        G[(Cloud Storage<br/>images/videos)]
+    end
+
+    subgraph Generation
+        H[傾向分析<br/>TrendAnalysis]
+        I[Gemini 2.5 Flash<br/>クマ画像生成]
+        J[Python Video Generator<br/>動画生成]
+    end
+
+    subgraph Output
+        K[クマ画像]
+        L[動画]
+        M[FlexMessage<br/>カルーセル]
+    end
+
+    A --> B --> C --> D
+    C --> E
+    D --> E
+    E --> H --> I --> K
+    I --> F
+    K --> G
+
+    F --> M
+    E --> M
+    F --> J --> L
+    L --> G
 ```
 
 ---

@@ -12,21 +12,28 @@ export async function saveMeal(
   analyzedData: MealAnalysis,
   bearId: string,
   groupId: string,
-  userId: string
+  userId: string,
+  imageUrl?: string
 ): Promise<Meal> {
   const now = admin.firestore.Timestamp.now();
 
   // 料理名だけEmbedding化（クラスタリング用）
   const dishEmbedding = await getEmbedding(analyzedData.dish);
 
-  const docRef = await mealsCollection.add({
+  const docData: Record<string, unknown> = {
     userId,
     groupId,
     bearId,
     analyzedData,
     dishEmbedding,
     createdAt: now,
-  });
+  };
+
+  if (imageUrl) {
+    docData.imageUrl = imageUrl;
+  }
+
+  const docRef = await mealsCollection.add(docData);
 
   return {
     id: docRef.id,
@@ -34,6 +41,7 @@ export async function saveMeal(
     groupId,
     bearId,
     analyzedData,
+    imageUrl,
     dishEmbedding,
     createdAt: now.toDate(),
   };
@@ -66,6 +74,7 @@ export async function getRecentMeals(
       groupId: data.groupId,
       bearId: data.bearId,
       analyzedData: data.analyzedData as MealAnalysis,
+      imageUrl: data.imageUrl as string | undefined,
       dishEmbedding: data.dishEmbedding as number[] | undefined,
       createdAt: data.createdAt.toDate(),
     };

@@ -1,8 +1,9 @@
 import * as logger from "firebase-functions/logger";
 import {
-  getRecentBears,
   getActiveGroup,
-  buildBearFlexMessage,
+  getRecentBearsWithMeals,
+  buildBearWithMealFlexMessage,
+  generateVideoWithPython,
 } from "../services";
 import {messagingApi} from "@line/bot-sdk";
 
@@ -31,6 +32,7 @@ export interface GenerateVideoError {
  */
 export interface BearsForVideo {
   success: true;
+  groupId: string;
   bearImageUrls: string[];
   flexMessage: FlexMessage;
 }
@@ -54,9 +56,9 @@ export async function getBearsForVideo(
     };
   }
 
-  // クマ画像を取得
-  const bears = await getRecentBears(userId, activeGroup.id, 10);
-  if (bears.length < 2) {
+  // クマと食事を取得（最大30枚）
+  const bearsWithMeals = await getRecentBearsWithMeals(userId, activeGroup.id, 30);
+  if (bearsWithMeals.length < 2) {
     return {
       success: false,
       errorType: "not_enough_bears",
@@ -64,89 +66,33 @@ export async function getBearsForVideo(
     };
   }
 
-  const bearImageUrls = bears.map((b) => b.imageUrl);
-  const flexMessage = buildBearFlexMessage(bearImageUrls, "これまでのクマたち");
+  // 昇順（古い順）に並び替え
+  const reversed = [...bearsWithMeals].reverse();
+  const bearImageUrls = reversed.map((b) => b.bear.imageUrl);
+  const flexMessage = buildBearWithMealFlexMessage(reversed, "これまでのクマたち");
 
-  return {success: true, bearImageUrls, flexMessage};
+  return {success: true, groupId: activeGroup.id, bearImageUrls, flexMessage};
 }
 
 /**
  * 動画を生成するユースケース
  * @param userId ユーザーID
- * @param groupId グループID（オプション）
+ * @param groupId グループID
  */
 export async function generateVideo(
   userId: string,
-  groupId?: string
+  groupId: string
 ): Promise<GenerateVideoResponse> {
   try {
-    // アクティブなグループを取得
-    let targetGroupId = groupId;
-    if (!targetGroupId) {
-      const activeGroup = await getActiveGroup(userId);
-      if (!activeGroup) {
-        return {
-          success: false,
-          errorType: "no_group",
-          message: "まだ食事の記録がないよ🐻\nまずは食事の写真を送ってね！",
-        };
-      }
-      targetGroupId = activeGroup.id;
-    }
-
-    // クマ画像を取得
-    const bears = await getRecentBears(userId, targetGroupId, 10);
-    if (bears.length < 2) {
-      return {
-        success: false,
-        errorType: "not_enough_bears",
-        message: "動画を作るには2枚以上のクマ画像が必要だよ🐻\nもう少し食事を記録してね！",
-      };
-    }
-
-    logger.info("Bears fetched for video", {count: bears.length});
-
-    // Python動画生成関数を呼び出し
-    const videoGeneratorUrl =
-      process.env.VIDEO_GENERATOR_URL ||
-      "https://generate-video-python-j7lkvu6b3a-uc.a.run.app";
-
-    logger.info("Calling video generator", {
-      url: videoGeneratorUrl,
+    logger.info("Starting video generation with python-video-generator", {
       userId,
-      groupId: targetGroupId,
+      groupId,
     });
 
-    const response = await fetch(videoGeneratorUrl, {
-      method: "POST",
-      headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({userId, groupId: targetGroupId, imageCount: 10}),
-    });
+    // python-video-generatorで動画生成
+    const result = await generateVideoWithPython(userId, groupId);
 
-    logger.info("Video generator response", {
-      status: response.status,
-      ok: response.ok,
-    });
-
-    const resultText = await response.text();
-    logger.info("Video generator response body", {
-      body: resultText.substring(0, 500),
-    });
-
-    let result: {videoUrl?: string; thumbnailUrl?: string; error?: string};
-    try {
-      result = JSON.parse(resultText);
-    } catch {
-      throw new Error(`Invalid JSON response: ${resultText.substring(0, 200)}`);
-    }
-
-    if (!response.ok || !result.videoUrl || !result.thumbnailUrl) {
-      throw new Error(
-        result.error || `Video generation failed (status: ${response.status})`
-      );
-    }
-
-    logger.info("Video generated", {
+    logger.info("Video generated with python-video-generator", {
       videoUrl: result.videoUrl,
       thumbnailUrl: result.thumbnailUrl,
     });

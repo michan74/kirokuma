@@ -83,17 +83,22 @@ export async function createBear(
     const bearImageBuffer = await generateBearImage(allMeals, previousBearImageBase64, trendAnalysis);
     logger.info("Bear image generated");
 
-    // 7. くま画像をStorageにアップロード
+    // 7. 食事画像をStorageにアップロード
     const timestamp = Date.now();
+    const mealImageBuffer = Buffer.from(imageBase64, "base64");
+    const mealImageUrl = await uploadImage(mealImageBuffer, `meals/${userId}/${timestamp}.jpg`);
+    logger.info("Meal image uploaded", {url: mealImageUrl});
+
+    // 8. くま画像をStorageにアップロード
     const bearImageUrl = await uploadImage(bearImageBuffer, `bears/${timestamp}.png`);
     logger.info("Bear image uploaded", {url: bearImageUrl});
 
-    // 8. くまをDBに保存
+    // 9. くまをDBに保存
     const savedBear = await saveBear(bearImageUrl, userId);
     logger.info("Bear saved", {bearId: savedBear.id});
 
-    // 9. 食事をDBに保存
-    const savedMeal = await saveMeal(mealAnalysis, savedBear.id, groupId, userId);
+    // 10. 食事をDBに保存（画像URLも保存）
+    const savedMeal = await saveMeal(mealAnalysis, savedBear.id, groupId, userId, mealImageUrl);
     logger.info("Meal saved", {mealId: savedMeal.id});
 
     return {

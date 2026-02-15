@@ -5,7 +5,6 @@ import {messagingApi, WebhookEvent, MessageEvent, PostbackEvent} from "@line/bot
 import {
   analyzeMeal,
   NotFoodError,
-  generateVideoFromBears,
 } from "./services";
 import {
   createBear,
@@ -65,8 +64,13 @@ export const lineWebhook = onRequest(
       } else if (msgEvent.message.type === "text") {
         const text = msgEvent.message.text;
 
-        if (text.includes("動画生成")) {
-          await handleVideoGenerationEvent(msgEvent);
+        const userId = msgEvent.source.userId;
+        if (!userId) {
+          await sendGuideMessage(msgEvent.replyToken);
+        } else if (text.includes("動画生成")) {
+          await handleGenerateVideo(userId, msgEvent.replyToken);
+        } else if (text.includes("輪廻転生")) {
+          await handleResetBear(userId, msgEvent.replyToken);
         } else {
           await sendGuideMessage(msgEvent.replyToken);
         }
@@ -185,17 +189,12 @@ async function handleBearCreateEvent(event: MessageEvent): Promise<void> {
   }
 }
 
-// テキストからの動画生成イベント処理
-async function handleVideoGenerationEvent(event: MessageEvent): Promise<void> {
-  const replyToken = event.replyToken;
-  const userId = event.source.userId;
-
-  if (!userId) {
-    logger.error("userId not found in event source");
-    return;
-  }
-
-  logger.info("Video generation requested via LINE", {userId});
+// 動画生成処理
+async function handleGenerateVideo(
+  userId: string,
+  replyToken: string
+): Promise<void> {
+  logger.info("Video generation requested", {userId});
 
   try {
     // クマ情報を取得してFlexMessageを先に送信
@@ -221,7 +220,7 @@ async function handleVideoGenerationEvent(event: MessageEvent): Promise<void> {
     logger.info("Sent bear flex message while generating video");
 
     // 動画生成ユースケースを実行
-    const result = await generateVideo(userId);
+    const result = await generateVideo(userId, bearsResult.groupId);
 
     if (!result.success) {
       await lineClient.pushMessage({
@@ -278,11 +277,11 @@ async function handlePostbackEvent(event: PostbackEvent): Promise<void> {
 
   switch (action) {
   case "generate_video":
-    await handleVideoGenerationFromPostback(userId, replyToken);
+    await handleGenerateVideo(userId, replyToken);
     break;
 
   case "reset":
-    await handleResetFromPostback(userId, replyToken);
+    await handleResetBear(userId, replyToken);
     break;
 
   default:
@@ -290,80 +289,8 @@ async function handlePostbackEvent(event: PostbackEvent): Promise<void> {
   }
 }
 
-// Postbackからの動画生成処理
-async function handleVideoGenerationFromPostback(
-  userId: string,
-  replyToken: string
-): Promise<void> {
-  logger.info("Video generation requested via postback", {userId});
-
-  try {
-    // クマ情報を取得してFlexMessageを先に送信
-    const bearsResult = await getBearsForVideo(userId);
-    if (!bearsResult.success) {
-      await lineClient.replyMessage({
-        replyToken,
-        messages: [{type: "text", text: bearsResult.message}],
-      });
-      return;
-    }
-
-    await lineClient.replyMessage({
-      replyToken,
-      messages: [
-        {
-          type: "text",
-          text: "動画を作成中...🎬\nこれまでのクマたちを振り返ってね！",
-        },
-        bearsResult.flexMessage,
-      ],
-    });
-    logger.info("Sent bear flex message while generating video");
-
-    // 動画生成ユースケースを実行
-    const result = await generateVideo(userId);
-
-    if (!result.success) {
-      await lineClient.pushMessage({
-        to: userId,
-        messages: [{type: "text", text: "ごめんね、動画生成に失敗しちゃった🐻💦"}],
-      });
-      return;
-    }
-
-    await lineClient.pushMessage({
-      to: userId,
-      messages: [
-        {type: "text", text: "くまの成長動画ができたよ！🐻🎬"},
-        {
-          type: "video",
-          originalContentUrl: result.videoUrl,
-          previewImageUrl: result.thumbnailUrl,
-        },
-      ],
-    });
-    logger.info("Sent video via pushMessage");
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    const errorStack = error instanceof Error ? error.stack : "";
-    logger.error("Error generating video from postback", {
-      message: errorMessage,
-      stack: errorStack,
-    });
-
-    try {
-      await lineClient.pushMessage({
-        to: userId,
-        messages: [{type: "text", text: "ごめんね、動画生成に失敗しちゃった🐻💦"}],
-      });
-    } catch (pushError) {
-      logger.error("Failed to send error message via push", {error: pushError});
-    }
-  }
-}
-
-// Postbackからのリセット処理
-async function handleResetFromPostback(
+// リセット処理
+async function handleResetBear(
   userId: string,
   replyToken: string
 ): Promise<void> {
@@ -390,51 +317,3 @@ async function handleResetFromPostback(
   });
 }
 
-// 動画生成エンドポイント（メモリ・タイムアウト増量）
-export const generateVideoEndpoint = onRequest(
-  {
-    memory: "2GiB",
-    timeoutSeconds: 540,
-    minInstances: 0,
-  },
-  async (req, res) => {
-    try {
-      const {userId} = req.body;
-
-      if (!userId) {
-        res.status(400).json({error: "userId is required"});
-        return;
-      }
-
-      logger.info("Video generation requested", {userId});
-
-      // 過去のくま画像を取得（最大10枚）
-      const {default: admin} = await import("firebase-admin");
-      const db = admin.firestore();
-      const bearsSnapshot = await db
-        .collection("bears")
-        .where("userId", "==", userId)
-        .orderBy("createdAt", "desc")
-        .limit(10)
-        .get();
-
-      if (bearsSnapshot.empty || bearsSnapshot.size < 2) {
-        res.status(400).json({error: "At least 2 bear images are required"});
-        return;
-      }
-
-      const bearImageUrls = bearsSnapshot.docs.map((doc) => doc.data().imageUrl);
-      logger.info("Bear images fetched", {count: bearImageUrls.length});
-
-      const videoUrl = await generateVideoFromBears(bearImageUrls, userId);
-      logger.info("Video generated successfully", {videoUrl});
-
-      res.json({videoUrl});
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      const errorStack = error instanceof Error ? error.stack : "";
-      logger.error("Error generating video", {message: errorMessage, stack: errorStack});
-      res.status(500).json({error: "Failed to generate video"});
-    }
-  }
-);

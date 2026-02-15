@@ -124,6 +124,8 @@ export interface Meal {
   groupId: string; // 所属するグループ
   bearId: string;
   analyzedData: MealAnalysis;
+  /** 食事画像のURL */
+  imageUrl?: string;
   /** 料理名のEmbedding（クラスタリング用） */
   dishEmbedding?: number[];
   createdAt: Date;

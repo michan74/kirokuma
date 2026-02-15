@@ -1,9 +1,9 @@
 export {analyzeMeal, NotFoodError} from "./mealAnalyzer";
 export {generateBearImage} from "./bearGenerator";
 export {uploadImage, downloadImageAsBase64} from "./storage";
-export {saveBear, getLatestBear, getRecentBears} from "./bearRepository";
+export {saveBear, getLatestBear, getRecentBears, getRecentBearsWithMeals} from "./bearRepository";
+export type {BearWithMeal} from "./bearRepository";
 export {saveMeal, getRecentMeals, getMealCount} from "./mealRepository";
-export {generateVideoFromBears} from "./videoGenerator";
 export {reincarnate, getActiveGroup} from "./bearGroupRepository";
 export {
   getEmbedding,
@@ -13,5 +13,6 @@ export {
   averageEmbedding,
   clusterDishes,
 } from "./embeddingService";
-export {buildBearFlexMessage} from "./lineMessage";
+export {buildBearFlexMessage, buildBearWithMealFlexMessage} from "./lineMessage";
 export {analyzeTrends} from "./trendAnalyzer";
+export {generateVideoWithPython} from "./videoGenerator";
